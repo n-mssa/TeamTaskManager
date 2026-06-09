@@ -1,6 +1,6 @@
 # team-tasks-manager
 
-تطبيق داخلي عربي لإدارة مهام الفريق، منفصل عن مشروع pricing-engine ولا يستخدم المنافذ `8000` أو `5173`.
+تطبيق داخلي عربي لإدارة مهام الفريق
 
 ## المنافذ
 
@@ -8,17 +8,14 @@
 - Frontend: `0.0.0.0:5174`
 - PostgreSQL: `localhost:5433`
 
-## تشغيل سريع باستخدام Docker
+## تشغيل سريع 
+cd C:\Users\NTC\TeamTaskManager\frontend
+npm run dev -- --host 0.0.0.0 --port 5174
+''''''
+cd C:\Users\NTC\TeamTaskManager\backend
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8010
 
-```powershell
-docker compose up --build
-```
-
-بعد تشغيل الخدمات، افتح نافذة PowerShell ثانية وشغل seed:
-
-```powershell
-docker compose exec backend python seed.py
-```
 
 الروابط:
 
@@ -94,24 +91,13 @@ npm run dev
 ## بيانات الدخول الافتراضية
 
 - Admin: `admin` / `admin123`
-- Manager: `manager_design` / `test123`
-- Employee design: `employee_design` / `test123`
-- Employee sales: `employee_sales` / `test123`
 
 ## الوصول من جهاز آخر على الشبكة
 
-اعرف IP الجهاز الذي يشغل التطبيق:
+:
 
-```powershell
-ipconfig
-```
-
-ثم افتح من الجهاز الآخر:
-
-- Frontend: `http://YOUR-LAN-IP:5174`
-- Backend docs: `http://YOUR-LAN-IP:8010/docs`
-
-إذا منع Windows Firewall الاتصال، اسمح للمنفذين `8010` و `5174` للشبكة الخاصة Private Network.
+- Frontend: `http://ip:5174`
+- Backend docs: `http://ip:8010/docs`
 
 ## ملاحظات الصلاحيات
 
