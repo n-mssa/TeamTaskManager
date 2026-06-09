@@ -7,3 +7,12 @@ __pycache__/
 node_modules/
 dist/
 .pytest_cache/
+
+# AI assistant and agent workspace files
+.agents/
+.codex/
+.claude/
+AGENTS.md
+CLAUDE.md
+*.prompt.md
+.github/copilot*
