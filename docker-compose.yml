@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16
+    container_name: team_tasks_db
+    environment:
+      POSTGRES_DB: team_tasks
+      POSTGRES_USER: task_user
+      POSTGRES_PASSWORD: task_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - team_tasks_pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    container_name: team_tasks_backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://task_user:task_password@db:5432/team_tasks
+      SECRET_KEY: change-this-secret
+      ACCESS_TOKEN_EXPIRE_MINUTES: 720
+      CORS_ORIGINS: http://localhost:5174,http://127.0.0.1:5174
+    ports:
+      - "8010:8010"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: team_tasks_frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8010
+    ports:
+      - "5174:5174"
+    depends_on:
+      - backend
+
+volumes:
+  team_tasks_pgdata:

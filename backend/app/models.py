@@ -1,0 +1,130 @@
+from datetime import datetime
+from enum import Enum
+
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
+from .database import Base
+
+
+class UserRole(str, Enum):
+    admin = "admin"
+    manager = "manager"
+    employee = "employee"
+
+
+class TaskPriority(str, Enum):
+    low = "low"
+    normal = "normal"
+    high = "high"
+    urgent = "urgent"
+
+
+class TaskStatus(str, Enum):
+    pending = "pending"
+    in_progress = "in_progress"
+    blocked = "blocked"
+    delayed = "delayed"
+    done = "done"
+    cancelled = "cancelled"
+
+
+class Department(Base):
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name_ar = Column(String(160), nullable=False, unique=True)
+    name_en = Column(String(160), nullable=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    users = relationship("User", back_populates="department", foreign_keys="User.department_id")
+    manager = relationship("User", foreign_keys=[manager_id], post_update=True)
+    tasks = relationship("Task", back_populates="department")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(80), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name_ar = Column(String(160), nullable=False)
+    full_name_en = Column(String(160), nullable=True)
+    email = Column(String(255), nullable=True)
+    role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.employee)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    department = relationship("Department", back_populates="users", foreign_keys=[department_id])
+    assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assigned_to_user_id")
+    created_tasks = relationship("Task", back_populates="creator", foreign_keys="Task.created_by_user_id")
+
+
+class DelayReason(Base):
+    __tablename__ = "delay_reasons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name_ar = Column(String(180), nullable=False, unique=True)
+    name_en = Column(String(180), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(220), nullable=False)
+    description = Column(Text, nullable=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    priority = Column(SQLEnum(TaskPriority), nullable=False, default=TaskPriority.normal)
+    status = Column(SQLEnum(TaskStatus), nullable=False, default=TaskStatus.pending)
+    expected_minutes = Column(Integer, nullable=False)
+    due_date = Column(Date, nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    delay_reason_id = Column(Integer, ForeignKey("delay_reasons.id"), nullable=True)
+    delay_reason_text = Column(Text, nullable=True)
+    manager_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    department = relationship("Department", back_populates="tasks")
+    assignee = relationship("User", back_populates="assigned_tasks", foreign_keys=[assigned_to_user_id])
+    creator = relationship("User", back_populates="created_tasks", foreign_keys=[created_by_user_id])
+    delay_reason = relationship("DelayReason")
+    comments = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan")
+    history = relationship("TaskStatusHistory", back_populates="task", cascade="all, delete-orphan")
+
+
+class TaskComment(Base):
+    __tablename__ = "task_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    comment_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    task = relationship("Task", back_populates="comments")
+    user = relationship("User")
+
+
+class TaskStatusHistory(Base):
+    __tablename__ = "task_status_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    old_status = Column(SQLEnum(TaskStatus), nullable=True)
+    new_status = Column(SQLEnum(TaskStatus), nullable=False)
+    changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    changed_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    task = relationship("Task", back_populates="history")
+    changed_by = relationship("User")

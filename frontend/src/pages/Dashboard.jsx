@@ -1,0 +1,72 @@
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../api/client'
+import KanbanBoard from '../components/KanbanBoard'
+import { statusLabels } from '../utils/labels'
+
+export default function Dashboard({ user, openTask, createTask }) {
+  const [tasks, setTasks] = useState([])
+  const [status, setStatus] = useState('')
+  const [assignedTo, setAssignedTo] = useState('')
+  const [error, setError] = useState('')
+
+  async function load() {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (assignedTo) params.set('assigned_to', assignedTo)
+    try {
+      setTasks(await api(`/tasks${params.toString() ? `?${params}` : ''}`))
+      setError('')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  useEffect(() => { load() }, [status, assignedTo])
+
+  const summary = useMemo(() => ({
+    total: tasks.length,
+    pending: tasks.filter((task) => task.status === 'pending').length,
+    inProgress: tasks.filter((task) => task.status === 'in_progress').length,
+    done: tasks.filter((task) => task.status === 'done').length,
+    delayed: tasks.filter((task) => task.status === 'delayed' || (new Date(task.due_date) < new Date() && !['done', 'cancelled'].includes(task.status))).length,
+  }), [tasks])
+
+  async function updateStatus(task, nextStatus) {
+    const payload = { status: nextStatus }
+    if (nextStatus === 'delayed') {
+      const reason = window.prompt('سبب التأخير')
+      if (!reason) return
+      payload.delay_reason_text = reason
+    }
+    await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
+    load()
+  }
+
+  return (
+    <section>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">{user.role === 'admin' ? 'كل الأقسام' : 'قسمك فقط'}</p>
+          <h1>{user.role === 'admin' ? 'لوحة الإدارة' : 'لوحة القسم'}</h1>
+        </div>
+        <button className="primary" onClick={createTask}>إنشاء مهمة</button>
+      </div>
+      <div className="stats">
+        <div><strong>{summary.total}</strong><span>إجمالي المهام</span></div>
+        <div><strong>{summary.pending}</strong><span>بانتظار التنفيذ</span></div>
+        <div><strong>{summary.inProgress}</strong><span>قيد التنفيذ</span></div>
+        <div><strong>{summary.done}</strong><span>منجزة</span></div>
+        <div><strong>{summary.delayed}</strong><span>متأخرة</span></div>
+      </div>
+      <div className="filters compact">
+        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="">كل الحالات</option>
+          {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <input value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} placeholder="رقم الموظف" />
+      </div>
+      {error && <p className="error">{error}</p>}
+      <KanbanBoard tasks={tasks} onOpen={openTask} onMove={updateStatus} />
+    </section>
+  )
+}
