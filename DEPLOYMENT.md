@@ -41,6 +41,9 @@ The API creates and updates its tables during startup. Verify it at:
 https://YOUR-API.onrender.com/health
 ```
 
+The Blueprint pins the API to Python 3.12 because some pinned backend
+dependencies do not currently build on Python 3.14.
+
 ## 3. Add initial data
 
 The seed script creates sample users and tasks with known passwords. Only run it
