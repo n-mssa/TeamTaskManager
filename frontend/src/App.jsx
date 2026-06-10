@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Building2, ClipboardList, LogOut, Plus, Users as UsersIcon } from 'lucide-react'
+import { BarChart3, Building2, ClipboardList, LogOut, Moon, Plus, Sun, Users as UsersIcon } from 'lucide-react'
 import { api, setToken } from './api/client'
 import Login from './pages/Login'
 import MyTasks from './pages/MyTasks'
@@ -15,6 +15,12 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [route, setRoute] = useState('loading')
   const [selectedTask, setSelectedTask] = useState(null)
+  const [theme, setTheme] = useState(() => localStorage.getItem('team_tasks_theme') || 'light')
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('team_tasks_theme', theme)
+  }, [theme])
 
   useEffect(() => {
     api('/auth/me')
@@ -43,7 +49,14 @@ export default function App() {
   }
 
   if (route === 'loading') return <div className="empty">جار التحميل...</div>
-  if (route === 'login') return <Login onLogin={(me) => { setUser(me); setRoute(defaultRoute(me.role)) }} />
+  if (route === 'login') {
+    return (
+      <>
+        <ThemeToggle theme={theme} setTheme={setTheme} className="login-theme-toggle" />
+        <Login onLogin={(me) => { setUser(me); setRoute(defaultRoute(me.role)) }} />
+      </>
+    )
+  }
 
   const nav = buildNav(user.role)
 
@@ -72,7 +85,10 @@ export default function App() {
       <main className="main">
         <header className="topbar">
           <div><strong>{user.full_name_ar}</strong><span>{user.role}</span></div>
-          <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button>
+          <div className="topbar-actions">
+            <ThemeToggle theme={theme} setTheme={setTheme} />
+            <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button>
+          </div>
         </header>
         {route === 'my-tasks' && <MyTasks openTask={openTask} />}
         {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
@@ -84,6 +100,20 @@ export default function App() {
         {route === 'delay-reasons' && <DelayReasons />}
       </main>
     </div>
+  )
+}
+
+function ThemeToggle({ theme, setTheme, className = '' }) {
+  const isDark = theme === 'dark'
+  return (
+    <button
+      className={`icon-button ${className}`}
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      title={isDark ? 'استخدام الوضع النهاري' : 'استخدام الوضع الليلي'}
+      aria-label={isDark ? 'استخدام الوضع النهاري' : 'استخدام الوضع الليلي'}
+    >
+      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
   )
 }
 
