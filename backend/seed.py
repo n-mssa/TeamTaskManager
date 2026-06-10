@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
@@ -94,7 +94,7 @@ def main():
                     status=TaskStatus.in_progress,
                     expected_minutes=180,
                     due_date=today + timedelta(days=2),
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(timezone.utc),
                 ),
                 Task(
                     title="كليشة حبيبة كنافة كيلو",
@@ -106,7 +106,7 @@ def main():
                     status=TaskStatus.done,
                     expected_minutes=90,
                     due_date=today - timedelta(days=1),
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(timezone.utc),
                 ),
                 Task(
                     title="قالب 20*20 لجين سعدالدين",
