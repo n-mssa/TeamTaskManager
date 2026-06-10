@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusLabels } from '../utils/labels'
 import { statusChangePayload } from '../utils/tasks'
+import { AlertTriangle, CheckCircle2, Clock3, ListTodo, PlayCircle } from 'lucide-react'
 
 export default function Dashboard({ user, openTask, createTask }) {
   const [tasks, setTasks] = useState([])
@@ -57,11 +58,11 @@ export default function Dashboard({ user, openTask, createTask }) {
         <button className="primary" onClick={createTask}>إنشاء مهمة</button>
       </div>
       <div className="stats">
-        <div><strong>{summary.total}</strong><span>إجمالي المهام</span></div>
-        <div><strong>{summary.pending}</strong><span>بانتظار التنفيذ</span></div>
-        <div><strong>{summary.inProgress}</strong><span>قيد التنفيذ</span></div>
-        <div><strong>{summary.done}</strong><span>منجزة</span></div>
-        <div><strong>{summary.delayed}</strong><span>متأخرة</span></div>
+        <Stat icon={ListTodo} value={summary.total} label="إجمالي المهام" tone="slate" />
+        <Stat icon={Clock3} value={summary.pending} label="بانتظار التنفيذ" tone="amber" />
+        <Stat icon={PlayCircle} value={summary.inProgress} label="قيد التنفيذ" tone="blue" />
+        <Stat icon={CheckCircle2} value={summary.done} label="منجزة" tone="green" />
+        <Stat icon={AlertTriangle} value={summary.delayed} label="متأخرة" tone="red" />
       </div>
       <div className="filters compact">
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -74,4 +75,8 @@ export default function Dashboard({ user, openTask, createTask }) {
       <KanbanBoard tasks={tasks} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />
     </section>
   )
+}
+
+function Stat({ icon: Icon, value, label, tone }) {
+  return <div className={`stat-card tone-${tone}`}><span className="stat-icon"><Icon size={20} /></span><strong>{value}</strong><span>{label}</span></div>
 }

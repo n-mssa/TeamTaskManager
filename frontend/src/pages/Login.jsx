@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CheckSquare } from 'lucide-react'
 import { api, setToken } from '../api/client'
 
 export default function Login({ onLogin }) {
@@ -29,7 +30,12 @@ export default function Login({ onLogin }) {
   return (
     <main className="login-page">
       <form className="login-box" onSubmit={submit}>
+        <div className="login-brand">
+          <span className="brand-mark"><CheckSquare size={19} /></span>
+          <div><strong>لوحة المهام</strong><span>إدارة مهام الفريق</span></div>
+        </div>
         <h1>تسجيل الدخول</h1>
+        <p className="login-intro">أدخل بياناتك للوصول إلى مساحة العمل.</p>
         <label>
           اسم المستخدم
           <input value={username} onChange={(event) => setUsername(event.target.value)} />

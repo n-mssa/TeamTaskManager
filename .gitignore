@@ -16,3 +16,6 @@ AGENTS.md
 CLAUDE.md
 *.prompt.md
 .github/copilot*
+
+# Local visual reference prototype; never ship its mock data or dependencies.
+taskflow/

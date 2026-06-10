@@ -32,7 +32,7 @@ export default function Departments() {
         <label>المدير<select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}><option value="">بدون</option>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name_ar}</option>)}</select></label>
         <button className="primary">إنشاء قسم</button>
       </form>
-      <div className="table-wrap"><table><thead><tr><th>القسم</th><th>English</th><th>المدير</th></tr></thead>
+      <div className="table-wrap"><table><thead><tr><th>القسم</th><th>الاسم بالإنجليزية</th><th>المدير</th></tr></thead>
         <tbody>{departments.map((item) => <tr key={item.id}><td>{item.name_ar}</td><td>{item.name_en || '-'}</td><td>{users.find((user) => user.id === item.manager_id)?.full_name_ar || '-'}</td></tr>)}</tbody>
       </table></div>
     </section>

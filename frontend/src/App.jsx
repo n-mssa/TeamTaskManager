@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, BarChart3, Building2, CalendarDays, ClipboardList, LogOut, Moon, Plus, Sun, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
-import { priorityLabels, statusLabels } from './utils/labels'
+import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
 import MyTasks from './pages/MyTasks'
 import Dashboard from './pages/Dashboard'
@@ -88,8 +88,8 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <ClipboardList />
-          <div><strong>لوحة المهام</strong><span>Team Tasks Manager</span></div>
+          <span className="brand-mark"><ClipboardList size={18} /></span>
+          <div><strong>لوحة المهام</strong><span>إدارة مهام الفريق</span></div>
         </div>
         <nav>
           {nav.map((item) => (
@@ -105,23 +105,30 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <div className="sidebar-user">
+          <span className="avatar">{initials(user.full_name_ar)}</span>
+          <div><strong>{user.full_name_ar}</strong><span>{roleLabels[user.role]}</span></div>
+          <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={17} /></button>
+        </div>
       </aside>
       <main className="main">
         <header className="topbar">
-          <div><strong>{user.full_name_ar}</strong><span>{user.role}</span></div>
+          <div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div>
           <div className="topbar-actions">
             <ThemeToggle theme={theme} setTheme={setTheme} />
-            <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button>
+            <span className="topbar-avatar avatar">{initials(user.full_name_ar)}</span>
           </div>
         </header>
-        {route === 'my-tasks' && <MyTasks openTask={openTask} />}
-        {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
-        {route === 'task-form' && <TaskForm taskId={selectedTask} onSaved={() => setRoute(defaultRoute(user.role))} />}
-        {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
-        {route === 'reports' && <Reports />}
-        {route === 'users' && <Users />}
-        {route === 'departments' && <Departments />}
-        {route === 'delay-reasons' && <DelayReasons />}
+        <div className="page-content">
+          {route === 'my-tasks' && <MyTasks openTask={openTask} />}
+          {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
+          {route === 'task-form' && <TaskForm taskId={selectedTask} onSaved={() => setRoute(defaultRoute(user.role))} />}
+          {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
+          {route === 'reports' && <Reports />}
+          {route === 'users' && <Users />}
+          {route === 'departments' && <Departments />}
+          {route === 'delay-reasons' && <DelayReasons />}
+        </div>
       </main>
       {briefing && (
         <TaskBriefing
@@ -136,6 +143,25 @@ export default function App() {
       )}
     </div>
   )
+}
+
+function initials(name = '') {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('')
+}
+
+function routeTitle(route) {
+  const titles = {
+    'my-tasks': 'مهامي',
+    dashboard: 'لوحة القسم',
+    'admin-dashboard': 'لوحة الإدارة',
+    'task-form': 'إدارة المهمة',
+    'task-details': 'تفاصيل المهمة',
+    reports: 'التقارير',
+    users: 'المستخدمون',
+    departments: 'الأقسام',
+    'delay-reasons': 'أسباب التأخير',
+  }
+  return titles[route] || 'لوحة المهام'
 }
 
 function TaskBriefing({ briefing, user, onClose, onOpen }) {

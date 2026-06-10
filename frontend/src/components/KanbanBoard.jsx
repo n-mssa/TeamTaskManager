@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Clock, CalendarDays, GripVertical } from 'lucide-react'
 import { boardColumns, priorityLabels } from '../utils/labels'
 import { elapsedSeconds, formatDuration } from '../utils/tasks'
+import EmptyState from './EmptyState'
 
 export default function KanbanBoard({ tasks, onOpen, onMove, onOverrun }) {
   const [, setTick] = useState(0)
@@ -23,7 +24,7 @@ export default function KanbanBoard({ tasks, onOpen, onMove, onOverrun }) {
     return () => clearInterval(timer)
   }, [tasks, onOverrun])
 
-  if (!tasks.length) return <div className="empty">لا توجد مهام مطابقة.</div>
+  if (!tasks.length) return <EmptyState title="لا توجد مهام مطابقة" description="جرّب تغيير عوامل التصفية أو إنشاء مهمة جديدة." />
 
   function handleDragStart(event, task) {
     event.dataTransfer.effectAllowed = 'move'
@@ -53,7 +54,9 @@ export default function KanbanBoard({ tasks, onOpen, onMove, onOverrun }) {
               <small>{columnTasks.length}</small>
             </header>
             <div className="column-list">
-              {columnTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={onOpen} onDragStart={handleDragStart} />)}
+              {columnTasks.length
+                ? columnTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={onOpen} onDragStart={handleDragStart} />)
+                : <EmptyState compact title="لا توجد مهام" description="اسحب مهمة إلى هذه القائمة." />}
             </div>
           </section>
         )
@@ -66,6 +69,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const overdue = new Date(task.due_date) < new Date().setHours(0, 0, 0, 0) && !['done', 'cancelled'].includes(task.status)
   const worked = elapsedSeconds(task)
   const overExpected = worked > task.expected_minutes * 60
+  const progress = Math.min(100, Math.round((worked / (task.expected_minutes * 60)) * 100))
   return (
     <article
       className={`task-card ${overdue ? 'is-overdue' : ''}`}
@@ -85,6 +89,9 @@ function TaskCard({ task, onOpen, onDragStart }) {
       </div>
       <div className={`live-timer ${overExpected ? 'is-over' : ''}`}>
         الوقت الفعلي: {formatDuration(worked)} {overExpected ? '• تجاوز المتوقع' : ''}
+      </div>
+      <div className="task-progress" aria-label={`نسبة الوقت المستخدم ${progress}%`}>
+        <span style={{ width: `${progress}%` }} />
       </div>
       <div className="task-footer">
         <span>{task.assignee?.full_name_ar || 'غير محدد'}</span>

@@ -1,7 +1,8 @@
 import { priorityLabels, statusLabels } from '../utils/labels'
+import EmptyState from './EmptyState'
 
 export default function TaskTable({ tasks, onOpen, onStatus }) {
-  if (!tasks.length) return <div className="empty">لا توجد مهام مطابقة.</div>
+  if (!tasks.length) return <EmptyState title="لا توجد مهام مطابقة" description="لا توجد نتائج ضمن عوامل التصفية الحالية." />
   return (
     <div className="table-wrap">
       <table>
