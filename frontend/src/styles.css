@@ -40,6 +40,12 @@ button.active {
   background: #f1f5f9;
 }
 
+button.danger {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+
 .primary {
   background: #2f5f8f;
   color: #ffffff;
@@ -391,6 +397,18 @@ small,
 .delay-note {
   margin-top: 8px;
   color: #9f1f1f;
+}
+
+.live-timer {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.live-timer.is-over,
+.timer-over {
+  color: #b42318;
 }
 
 .priority {

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { priorityLabels, statusLabels } from '../utils/labels'
+import { elapsedSeconds, formatDuration } from '../utils/tasks'
 
-export default function TaskDetails({ taskId, editTask }) {
+export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [task, setTask] = useState(null)
   const [comments, setComments] = useState([])
   const [history, setHistory] = useState([])
   const [comment, setComment] = useState('')
+  const [, setTick] = useState(0)
 
   async function load() {
     setTask(await api(`/tasks/${taskId}`))
@@ -15,6 +17,10 @@ export default function TaskDetails({ taskId, editTask }) {
   }
 
   useEffect(() => { load() }, [taskId])
+  useEffect(() => {
+    const timer = setInterval(() => setTick((value) => value + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   async function addComment(event) {
     event.preventDefault()
@@ -24,12 +30,23 @@ export default function TaskDetails({ taskId, editTask }) {
     load()
   }
 
+  async function deleteTask() {
+    const reason = window.prompt('سبب حذف المهمة')
+    if (!reason?.trim()) return
+    if (!window.confirm('سيتم إخفاء المهمة مع الاحتفاظ بسجل الحذف. هل أنت متأكد؟')) return
+    await api(`/tasks/${taskId}`, { method: 'DELETE', body: JSON.stringify({ reason: reason.trim() }) })
+    onDeleted()
+  }
+
   if (!task) return <div className="empty">جار التحميل...</div>
   return (
     <section>
       <div className="page-head">
         <h1>{task.title}</h1>
-        <button className="primary" onClick={() => editTask(task.id)}>تعديل مهمة</button>
+        <div className="actions">
+          <button className="primary" onClick={() => editTask(task.id)}>تعديل مهمة</button>
+          {user.role === 'admin' && <button className="danger" onClick={deleteTask}>حذف المهمة</button>}
+        </div>
       </div>
       <div className="details-grid">
         <div><span>الحالة</span><strong>{statusLabels[task.status]}</strong></div>
@@ -37,12 +54,15 @@ export default function TaskDetails({ taskId, editTask }) {
         <div><span>المكلف</span><strong>{task.assignee?.full_name_ar}</strong></div>
         <div><span>القسم</span><strong>{task.department?.name_ar}</strong></div>
         <div><span>الوقت المتوقع</span><strong>{task.expected_minutes} دقيقة</strong></div>
+        <div><span>الوقت الفعلي</span><strong className={elapsedSeconds(task) > task.expected_minutes * 60 ? 'timer-over' : ''}>{formatDuration(elapsedSeconds(task))}</strong></div>
         <div><span>تاريخ التسليم</span><strong>{task.due_date}</strong></div>
         <div><span>بدأت في</span><strong>{task.started_at || '-'}</strong></div>
         <div><span>أنجزت في</span><strong>{task.completed_at || '-'}</strong></div>
       </div>
       <article className="panel"><h2>الوصف</h2><p>{task.description || 'لا يوجد وصف.'}</p></article>
       <article className="panel"><h2>سبب التأخير</h2><p>{task.delay_reason?.name_ar || task.delay_reason_text || 'لا يوجد.'}</p></article>
+      <article className="panel"><h2>سبب الانتظار</h2><p>{task.hold_reason_text || 'لا يوجد.'}</p></article>
+      <article className="panel"><h2>سبب تجاوز الوقت المتوقع</h2><p>{task.overrun_reason_text || 'لا يوجد.'}</p></article>
       <article className="panel">
         <h2>التعليقات</h2>
         <form className="inline-form" onSubmit={addComment}>
@@ -53,7 +73,7 @@ export default function TaskDetails({ taskId, editTask }) {
       </article>
       <article className="panel">
         <h2>سجل الحالة</h2>
-        {history.map((item) => <p key={item.id} className="note">{statusLabels[item.old_status] || '-'} ← {statusLabels[item.new_status]}<small>{item.changed_at}</small></p>)}
+        {history.map((item) => <p key={item.id} className="note">{statusLabels[item.old_status] || '-'} ← {statusLabels[item.new_status]}{item.reason_text && <small>السبب: {item.reason_text}</small>}<small>{item.changed_at}</small></p>)}
       </article>
     </section>
   )

@@ -77,7 +77,7 @@ export default function App() {
         {route === 'my-tasks' && <MyTasks openTask={openTask} />}
         {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
         {route === 'task-form' && <TaskForm taskId={selectedTask} onSaved={() => setRoute(defaultRoute(user.role))} />}
-        {route === 'task-details' && <TaskDetails taskId={selectedTask} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} />}
+        {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
         {route === 'reports' && <Reports />}
         {route === 'users' && <Users />}
         {route === 'departments' && <Departments />}

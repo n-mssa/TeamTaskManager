@@ -13,6 +13,8 @@ const emptyTask = {
   expected_minutes_part: 0,
   due_date: '',
   manager_notes: '',
+  hold_reason_text: '',
+  overrun_reason_text: '',
 }
 
 export default function TaskForm({ taskId, onSaved }) {
@@ -54,6 +56,8 @@ export default function TaskForm({ taskId, onSaved }) {
       due_date: form.due_date,
       delay_reason_id: form.delay_reason_id ? Number(form.delay_reason_id) : null,
       delay_reason_text: form.delay_reason_text || null,
+      hold_reason_text: form.hold_reason_text || null,
+      overrun_reason_text: form.overrun_reason_text || null,
       manager_notes: form.manager_notes || null,
     }
     try {
@@ -88,6 +92,8 @@ export default function TaskForm({ taskId, onSaved }) {
           <option value="">بدون</option>{delayReasons.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
         </select></label>
         <label>شرح السبب<input value={form.delay_reason_text || ''} onChange={(e) => setValue('delay_reason_text', e.target.value)} /></label>
+        {form.status === 'blocked' && <label className="span-2">سبب الانتظار<textarea required value={form.hold_reason_text || ''} onChange={(e) => setValue('hold_reason_text', e.target.value)} /></label>}
+        <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>
         <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>
         {error && <p className="error span-2">{error}</p>}
         <button className="primary span-2">حفظ</button>

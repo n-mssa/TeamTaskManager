@@ -1,0 +1,40 @@
+export function elapsedSeconds(task) {
+  let seconds = task.work_seconds || 0
+  if (task.status === 'in_progress' && task.timer_started_at) {
+    seconds += Math.max(0, Math.floor((Date.now() - new Date(task.timer_started_at).getTime()) / 1000))
+  }
+  return seconds
+}
+
+export function formatDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(totalSeconds))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = seconds % 60
+  return `${hours ? `${hours}س ` : ''}${minutes}د ${rest}ث`
+}
+
+export function statusChangePayload(task, nextStatus) {
+  const payload = { status: nextStatus }
+
+  if (nextStatus === 'blocked') {
+    const reason = window.prompt('سبب وضع المهمة قيد الانتظار')
+    if (!reason?.trim()) return null
+    payload.hold_reason_text = reason.trim()
+  }
+
+  if (nextStatus === 'delayed') {
+    const reason = window.prompt('سبب التأخير')
+    if (!reason?.trim()) return null
+    payload.delay_reason_text = reason.trim()
+  }
+
+  const exceededExpected = elapsedSeconds(task) > task.expected_minutes * 60
+  if (task.status === 'in_progress' && nextStatus !== 'in_progress' && exceededExpected && !task.overrun_reason_text) {
+    const reason = window.prompt('تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز')
+    if (!reason?.trim()) return null
+    payload.overrun_reason_text = reason.trim()
+  }
+
+  return payload
+}

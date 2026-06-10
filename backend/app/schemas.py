@@ -104,6 +104,8 @@ class TaskBase(BaseModel):
     due_date: date
     delay_reason_id: Optional[int] = None
     delay_reason_text: Optional[str] = None
+    hold_reason_text: Optional[str] = None
+    overrun_reason_text: Optional[str] = None
     manager_notes: Optional[str] = None
 
 
@@ -122,6 +124,8 @@ class TaskUpdate(BaseModel):
     due_date: Optional[date] = None
     delay_reason_id: Optional[int] = None
     delay_reason_text: Optional[str] = None
+    hold_reason_text: Optional[str] = None
+    overrun_reason_text: Optional[str] = None
     manager_notes: Optional[str] = None
 
 
@@ -129,6 +133,12 @@ class TaskStatusUpdate(BaseModel):
     status: TaskStatus
     delay_reason_id: Optional[int] = None
     delay_reason_text: Optional[str] = None
+    hold_reason_text: Optional[str] = None
+    overrun_reason_text: Optional[str] = None
+
+
+class TaskDelete(BaseModel):
+    reason: str = Field(min_length=1)
 
 
 class TaskOut(TaskBase):
@@ -136,6 +146,10 @@ class TaskOut(TaskBase):
     id: int
     created_by_user_id: int
     started_at: Optional[datetime]
+    timer_started_at: Optional[datetime]
+    work_seconds: int
+    elapsed_seconds: int
+    is_over_expected: bool
     completed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
@@ -164,6 +178,7 @@ class HistoryOut(BaseModel):
     task_id: int
     old_status: Optional[TaskStatus]
     new_status: TaskStatus
+    reason_text: Optional[str]
     changed_by_user_id: int
     changed_at: datetime
 

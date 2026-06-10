@@ -7,7 +7,7 @@ from ..models import Department, DelayReason, Task, TaskStatus, User, UserRole
 
 
 def scoped_tasks(db: Session, current_user: User, department_id: int | None = None, user_id: int | None = None):
-    query = db.query(Task)
+    query = db.query(Task).filter(Task.deleted_at.is_(None))
     if current_user.role == UserRole.employee:
         query = query.filter(Task.assigned_to_user_id == current_user.id)
     elif current_user.role == UserRole.manager:

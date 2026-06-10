@@ -23,7 +23,7 @@ def can_access_task(user: User, task: Task) -> bool:
 
 
 def get_visible_task_or_403(db: Session, task_id: int, user: User) -> Task:
-    task = db.query(Task).filter(Task.id == task_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.deleted_at.is_(None)).first()
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     if not can_access_task(user, task):

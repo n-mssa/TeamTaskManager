@@ -88,10 +88,17 @@ class Task(Base):
     expected_minutes = Column(Integer, nullable=False)
     due_date = Column(Date, nullable=False)
     started_at = Column(DateTime(timezone=True), nullable=True)
+    timer_started_at = Column(DateTime(timezone=True), nullable=True)
+    work_seconds = Column(Integer, nullable=False, default=0)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     delay_reason_id = Column(Integer, ForeignKey("delay_reasons.id"), nullable=True)
     delay_reason_text = Column(Text, nullable=True)
+    hold_reason_text = Column(Text, nullable=True)
+    overrun_reason_text = Column(Text, nullable=True)
     manager_notes = Column(Text, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    deletion_reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -99,8 +106,21 @@ class Task(Base):
     assignee = relationship("User", back_populates="assigned_tasks", foreign_keys=[assigned_to_user_id])
     creator = relationship("User", back_populates="created_tasks", foreign_keys=[created_by_user_id])
     delay_reason = relationship("DelayReason")
+    deleted_by = relationship("User", foreign_keys=[deleted_by_user_id])
     comments = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan")
     history = relationship("TaskStatusHistory", back_populates="task", cascade="all, delete-orphan")
+
+    @property
+    def elapsed_seconds(self):
+        elapsed = self.work_seconds or 0
+        if self.status == TaskStatus.in_progress and self.timer_started_at:
+            now = datetime.now(self.timer_started_at.tzinfo) if self.timer_started_at.tzinfo else datetime.utcnow()
+            elapsed += max(0, int((now - self.timer_started_at).total_seconds()))
+        return elapsed
+
+    @property
+    def is_over_expected(self):
+        return self.elapsed_seconds > self.expected_minutes * 60
 
 
 class TaskComment(Base):
@@ -123,6 +143,7 @@ class TaskStatusHistory(Base):
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
     old_status = Column(SQLEnum(TaskStatus), nullable=True)
     new_status = Column(SQLEnum(TaskStatus), nullable=False)
+    reason_text = Column(Text, nullable=True)
     changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     changed_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

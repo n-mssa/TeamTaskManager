@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import Base, engine
+from .migrations import apply_migrations
 from .routers import auth, delay_reasons, departments, reports, tasks, users
 
 load_dotenv()
@@ -25,6 +26,7 @@ app.add_middleware(
 @app.on_event("startup")
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    apply_migrations()
 
 
 @app.get("/health")

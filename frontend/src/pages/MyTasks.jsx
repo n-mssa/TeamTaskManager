@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusOptions } from '../utils/labels'
+import { statusChangePayload } from '../utils/tasks'
 
 export default function MyTasks({ openTask }) {
   const [tasks, setTasks] = useState([])
@@ -28,13 +29,17 @@ export default function MyTasks({ openTask }) {
   }, [filter, tasks])
 
   async function updateStatus(task, status) {
-    const payload = { status }
-    if (status === 'delayed') {
-      const reason = window.prompt('سبب التأخير')
-      if (!reason) return
-      payload.delay_reason_text = reason
-    }
+    const payload = statusChangePayload(task, status)
+    if (!payload) return
     await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
+    load()
+  }
+
+  async function saveOverrunReason(task, reason) {
+    await api(`/tasks/${task.id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: task.status, overrun_reason_text: reason }),
+    })
     load()
   }
 
@@ -49,7 +54,7 @@ export default function MyTasks({ openTask }) {
         <button className={filter === 'overdue' ? 'active' : ''} onClick={() => setFilter('overdue')}>متأخرة عن موعدها</button>
       </div>
       {error && <p className="error">{error}</p>}
-      <KanbanBoard tasks={visible} onOpen={openTask} onMove={updateStatus} />
+      <KanbanBoard tasks={visible} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />
     </section>
   )
 }

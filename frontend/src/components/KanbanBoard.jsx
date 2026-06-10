@@ -1,7 +1,28 @@
+import { useEffect, useRef, useState } from 'react'
 import { Clock, CalendarDays, GripVertical } from 'lucide-react'
 import { boardColumns, priorityLabels } from '../utils/labels'
+import { elapsedSeconds, formatDuration } from '../utils/tasks'
 
-export default function KanbanBoard({ tasks, onOpen, onMove }) {
+export default function KanbanBoard({ tasks, onOpen, onMove, onOverrun }) {
+  const [, setTick] = useState(0)
+  const promptedOverruns = useRef(new Set())
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((value) => value + 1)
+      tasks.forEach((task) => {
+        const needsReason = task.status === 'in_progress'
+          && elapsedSeconds(task) > task.expected_minutes * 60
+          && !task.overrun_reason_text
+          && !promptedOverruns.current.has(task.id)
+        if (!needsReason) return
+        promptedOverruns.current.add(task.id)
+        const reason = window.prompt('تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز')
+        if (reason?.trim()) onOverrun(task, reason.trim())
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [tasks, onOverrun])
+
   if (!tasks.length) return <div className="empty">لا توجد مهام مطابقة.</div>
 
   function handleDragStart(event, task) {
@@ -19,7 +40,7 @@ export default function KanbanBoard({ tasks, onOpen, onMove }) {
   return (
     <div className="kanban-board">
       {boardColumns.map((column) => {
-        const columnTasks = tasks.filter((task) => task.status === column.value)
+        const columnTasks = tasks.filter((task) => task.status === column.value && !isOldCompletedTask(task))
         return (
           <section
             className="kanban-column"
@@ -43,6 +64,8 @@ export default function KanbanBoard({ tasks, onOpen, onMove }) {
 
 function TaskCard({ task, onOpen, onDragStart }) {
   const overdue = new Date(task.due_date) < new Date().setHours(0, 0, 0, 0) && !['done', 'cancelled'].includes(task.status)
+  const worked = elapsedSeconds(task)
+  const overExpected = worked > task.expected_minutes * 60
   return (
     <article
       className={`task-card ${overdue ? 'is-overdue' : ''}`}
@@ -60,13 +83,21 @@ function TaskCard({ task, onOpen, onDragStart }) {
         <span><Clock size={14} />{formatMinutes(task.expected_minutes)}</span>
         <span><CalendarDays size={14} />{task.due_date}</span>
       </div>
+      <div className={`live-timer ${overExpected ? 'is-over' : ''}`}>
+        الوقت الفعلي: {formatDuration(worked)} {overExpected ? '• تجاوز المتوقع' : ''}
+      </div>
       <div className="task-footer">
         <span>{task.assignee?.full_name_ar || 'غير محدد'}</span>
         <small>{task.department?.name_ar || ''}</small>
       </div>
       {task.delay_reason && <small className="delay-note">{task.delay_reason.name_ar}</small>}
+      {task.hold_reason_text && task.status === 'blocked' && <small className="delay-note">سبب الانتظار: {task.hold_reason_text}</small>}
     </article>
   )
+}
+
+function isOldCompletedTask(task) {
+  return task.status === 'done' && task.completed_at && Date.now() - new Date(task.completed_at).getTime() >= 7 * 24 * 60 * 60 * 1000
 }
 
 function formatMinutes(minutes) {
