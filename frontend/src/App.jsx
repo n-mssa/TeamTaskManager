@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Building2, ClipboardList, LogOut, Moon, Plus, Sun, Users as UsersIcon } from 'lucide-react'
+import { AlertTriangle, BarChart3, Building2, CalendarDays, ClipboardList, LogOut, Moon, Plus, Sun, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
+import { priorityLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
 import MyTasks from './pages/MyTasks'
 import Dashboard from './pages/Dashboard'
@@ -16,6 +17,7 @@ export default function App() {
   const [route, setRoute] = useState('loading')
   const [selectedTask, setSelectedTask] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('team_tasks_theme') || 'light')
+  const [briefing, setBriefing] = useState(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -31,6 +33,26 @@ export default function App() {
       .catch(() => setRoute('login'))
   }, [])
 
+  useEffect(() => {
+    if (!user) return
+    const briefingKey = `team_tasks_briefing_${user.id}`
+    if (sessionStorage.getItem(briefingKey)) return
+
+    api(`/tasks?assigned_to=${user.id}`)
+      .then((tasks) => {
+        const activeTasks = tasks.filter((task) => !['done', 'cancelled'].includes(task.status))
+        if (activeTasks.length) {
+          setBriefing({
+            tasks: rankUrgentTasks(activeTasks).slice(0, 4),
+            total: activeTasks.length,
+            overdue: activeTasks.filter(isOverdue).length,
+          })
+        }
+        sessionStorage.setItem(briefingKey, 'shown')
+      })
+      .catch(() => {})
+  }, [user])
+
   function defaultRoute(role) {
     if (role === 'employee') return 'my-tasks'
     if (role === 'manager') return 'dashboard'
@@ -38,8 +60,10 @@ export default function App() {
   }
 
   function logout() {
+    if (user) sessionStorage.removeItem(`team_tasks_briefing_${user.id}`)
     setToken(null)
     setUser(null)
+    setBriefing(null)
     setRoute('login')
   }
 
@@ -99,8 +123,86 @@ export default function App() {
         {route === 'departments' && <Departments />}
         {route === 'delay-reasons' && <DelayReasons />}
       </main>
+      {briefing && (
+        <TaskBriefing
+          briefing={briefing}
+          user={user}
+          onClose={() => setBriefing(null)}
+          onOpen={(id) => {
+            setBriefing(null)
+            openTask(id)
+          }}
+        />
+      )}
     </div>
   )
+}
+
+function TaskBriefing({ briefing, user, onClose, onOpen }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="briefing-modal" role="dialog" aria-modal="true" aria-labelledby="briefing-title" onClick={(event) => event.stopPropagation()}>
+        <header className="briefing-head">
+          <div>
+            <p className="eyebrow">مرحباً {user.full_name_ar}</p>
+            <h2 id="briefing-title">ملخص المهام العاجلة</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} title="إغلاق" aria-label="إغلاق"><X size={18} /></button>
+        </header>
+
+        <div className="briefing-summary">
+          <span>لديك <strong>{briefing.total}</strong> مهمة نشطة</span>
+          {briefing.overdue > 0 && <span className="briefing-overdue"><AlertTriangle size={16} /> متأخر في <strong>{briefing.overdue}</strong> مهمة</span>}
+        </div>
+
+        <div className="briefing-list">
+          {briefing.tasks.map((task) => (
+            <button className="briefing-task" key={task.id} onClick={() => onOpen(task.id)}>
+              <div>
+                <strong>{task.title}</strong>
+                <span>{statusLabels[task.status]} · {priorityLabels[task.priority]}</span>
+              </div>
+              <DueMessage task={task} />
+            </button>
+          ))}
+        </div>
+
+        <footer className="briefing-actions">
+          <button className="primary" onClick={onClose}>عرض لوحة المهام</button>
+        </footer>
+      </section>
+    </div>
+  )
+}
+
+function DueMessage({ task }) {
+  const days = daysFromToday(task.due_date)
+  if (days < 0) return <span className="due-message overdue"><AlertTriangle size={15} /> متأخرة منذ {Math.abs(days)} يوم</span>
+  if (days === 0) return <span className="due-message today"><CalendarDays size={15} /> موعدها اليوم</span>
+  if (days === 1) return <span className="due-message"><CalendarDays size={15} /> موعدها غداً</span>
+  return <span className="due-message"><CalendarDays size={15} /> متبقي {days} أيام</span>
+}
+
+function rankUrgentTasks(tasks) {
+  const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 }
+  return [...tasks].sort((a, b) => {
+    const aDays = daysFromToday(a.due_date)
+    const bDays = daysFromToday(b.due_date)
+    if (isOverdue(a) !== isOverdue(b)) return isOverdue(a) ? -1 : 1
+    if (priorityRank[a.priority] !== priorityRank[b.priority]) return priorityRank[a.priority] - priorityRank[b.priority]
+    return aDays - bDays
+  })
+}
+
+function isOverdue(task) {
+  return daysFromToday(task.due_date) < 0
+}
+
+function daysFromToday(dueDate) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(`${dueDate}T00:00:00`)
+  return Math.round((due - today) / 86400000)
 }
 
 function ThemeToggle({ theme, setTheme, className = '' }) {

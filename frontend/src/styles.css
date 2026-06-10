@@ -234,6 +234,116 @@ small,
   left: 18px;
 }
 
+.modal-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 32, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.briefing-modal {
+  width: min(600px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e2e7ef;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 24px 70px rgba(31, 41, 55, 0.24);
+}
+
+.briefing-head,
+.briefing-summary,
+.briefing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.briefing-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.briefing-summary {
+  flex-wrap: wrap;
+  margin: 18px 0 14px;
+  padding: 12px;
+  background: #f4f6f9;
+  border-radius: 8px;
+  color: #475467;
+}
+
+.briefing-summary span,
+.briefing-overdue,
+.due-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.briefing-overdue,
+.due-message.overdue {
+  color: #b42318;
+}
+
+.briefing-list {
+  display: grid;
+  gap: 9px;
+}
+
+.briefing-task {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px;
+  text-align: right;
+}
+
+.briefing-task div {
+  min-width: 0;
+}
+
+.briefing-task strong,
+.briefing-task span {
+  display: block;
+}
+
+.briefing-task strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1f2937;
+}
+
+.briefing-task span {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.briefing-task .due-message {
+  flex-shrink: 0;
+  color: #475467;
+  white-space: nowrap;
+}
+
+.briefing-task .due-message.overdue {
+  color: #b42318;
+}
+
+.briefing-actions {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
 .page-head {
   display: flex;
   align-items: center;
@@ -568,6 +678,7 @@ th {
 :root[data-theme='dark'] select,
 :root[data-theme='dark'] textarea,
 :root[data-theme='dark'] .login-box,
+:root[data-theme='dark'] .briefing-modal,
 :root[data-theme='dark'] .sidebar,
 :root[data-theme='dark'] .stats div,
 :root[data-theme='dark'] .panel,
@@ -580,6 +691,11 @@ th {
   background: #18222f;
   border-color: #2b3949;
   color: #e5e7eb;
+}
+
+:root[data-theme='dark'] .briefing-summary {
+  background: #131d28;
+  color: #b7c1ce;
 }
 
 :root[data-theme='dark'] .login-box,
@@ -634,6 +750,8 @@ th {
 :root[data-theme='dark'] .login-box h1,
 :root[data-theme='dark'] .page-head h1,
 :root[data-theme='dark'] .task-card h3,
+:root[data-theme='dark'] .briefing-head h2,
+:root[data-theme='dark'] .briefing-task strong,
 :root[data-theme='dark'] label,
 :root[data-theme='dark'] .column-head,
 :root[data-theme='dark'] .task-footer,
@@ -651,6 +769,16 @@ th {
 :root[data-theme='dark'] .task-meta,
 :root[data-theme='dark'] .details-grid span {
   color: #9ca8b8;
+}
+
+:root[data-theme='dark'] .briefing-task span,
+:root[data-theme='dark'] .briefing-task .due-message {
+  color: #9ca8b8;
+}
+
+:root[data-theme='dark'] .briefing-task .due-message.overdue,
+:root[data-theme='dark'] .briefing-overdue {
+  color: #ff9d9d;
 }
 
 :root[data-theme='dark'] .task-card.is-overdue,
@@ -698,6 +826,11 @@ th {
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .briefing-task {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media print {
@@ -721,6 +854,10 @@ th {
   .topbar,
   .filters,
   .actions {
+    display: none;
+  }
+
+  .modal-backdrop {
     display: none;
   }
 
