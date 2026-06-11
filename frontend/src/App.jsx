@@ -38,19 +38,23 @@ export default function App() {
     const briefingKey = `team_tasks_briefing_${user.id}`
     if (sessionStorage.getItem(briefingKey)) return
 
-    api(`/tasks?assigned_to=${user.id}`)
-      .then((tasks) => {
-        const activeTasks = tasks.filter((task) => !['done', 'cancelled'].includes(task.status))
-        if (activeTasks.length) {
-          setBriefing({
-            tasks: rankUrgentTasks(activeTasks).slice(0, 4),
-            total: activeTasks.length,
-            overdue: activeTasks.filter(isOverdue).length,
-          })
-        }
-        sessionStorage.setItem(briefingKey, 'shown')
-      })
-      .catch(() => {})
+    const loadBriefing = () => {
+      api(`/tasks?assigned_to=${user.id}`)
+        .then((tasks) => {
+          const activeTasks = tasks.filter((task) => !['done', 'cancelled'].includes(task.status))
+          if (activeTasks.length) {
+            setBriefing({
+              tasks: rankUrgentTasks(activeTasks).slice(0, 4),
+              total: activeTasks.length,
+              overdue: activeTasks.filter(isOverdue).length,
+            })
+          }
+          sessionStorage.setItem(briefingKey, 'shown')
+        })
+        .catch(() => {})
+    }
+    const timer = window.setTimeout(loadBriefing, 500)
+    return () => window.clearTimeout(timer)
   }, [user])
 
   function defaultRoute(role) {

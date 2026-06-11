@@ -9,8 +9,9 @@ export default function Users() {
   const [error, setError] = useState('')
 
   async function load() {
-    setUsers(await api('/users'))
-    setDepartments(await api('/departments'))
+    const [nextUsers, nextDepartments] = await Promise.all([api('/users'), api('/departments')])
+    setUsers(nextUsers)
+    setDepartments(nextDepartments)
   }
 
   useEffect(() => { load() }, [])

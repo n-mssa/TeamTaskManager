@@ -1,7 +1,7 @@
 from datetime import date
 
 from sqlalchemy import case, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..models import Department, DelayReason, Task, TaskStatus, User, UserRole
 
@@ -44,7 +44,7 @@ def task_row(task: Task):
 
 def weekly_report(db: Session, current_user: User, start_date: date, end_date: date, department_id: int | None = None, user_id: int | None = None):
     base = scoped_tasks(db, current_user, department_id, user_id)
-    all_tasks = base.all()
+    all_tasks = base.options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason)).all()
     completed = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and start_date <= task.completed_at.date() <= end_date]
     delayed = [
         task

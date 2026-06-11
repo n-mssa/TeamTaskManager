@@ -3,6 +3,7 @@ from os import getenv
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from .database import Base, engine
 from .migrations import apply_migrations
@@ -11,6 +12,7 @@ from .routers import auth, delay_reasons, departments, reports, tasks, users
 load_dotenv()
 
 app = FastAPI(title="Team Tasks Manager", version="1.0.0")
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 origins = [origin.strip() for origin in getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
 app.add_middleware(

@@ -7,8 +7,9 @@ export default function Departments() {
   const [form, setForm] = useState({ name_ar: '', name_en: '', manager_id: '' })
 
   async function load() {
-    setDepartments(await api('/departments'))
-    setUsers(await api('/users?active_only=true'))
+    const [nextDepartments, nextUsers] = await Promise.all([api('/departments'), api('/users?active_only=true')])
+    setDepartments(nextDepartments)
+    setUsers(nextUsers)
   }
 
   useEffect(() => { load() }, [])

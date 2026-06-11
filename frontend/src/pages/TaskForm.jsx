@@ -25,17 +25,23 @@ export default function TaskForm({ taskId, onSaved }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api('/users?active_only=true').then(setUsers)
-    api('/departments').then(setDepartments)
-    api('/delay-reasons').then(setDelayReasons)
-    if (taskId) {
-      api(`/tasks/${taskId}`).then((task) => setForm({
+    const requests = [
+      api('/users?active_only=true'),
+      api('/departments'),
+      api('/delay-reasons'),
+      taskId ? api(`/tasks/${taskId}`) : Promise.resolve(null),
+    ]
+    Promise.all(requests).then(([nextUsers, nextDepartments, nextDelayReasons, task]) => {
+      setUsers(nextUsers)
+      setDepartments(nextDepartments)
+      setDelayReasons(nextDelayReasons)
+      if (task) setForm({
         ...task,
         expected_hours: Math.floor(task.expected_minutes / 60),
         expected_minutes_part: task.expected_minutes % 60,
         due_date: task.due_date,
-      }))
-    }
+      })
+    })
   }, [taskId])
 
   function setValue(key, value) {

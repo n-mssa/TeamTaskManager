@@ -217,7 +217,13 @@ def add_comment(task_id: int, payload: CommentCreate, db: Session = Depends(get_
 @router.get("/{task_id}/comments", response_model=list[CommentOut])
 def list_comments(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     get_visible_task_or_403(db, task_id, current_user)
-    return db.query(TaskComment).filter(TaskComment.task_id == task_id).order_by(TaskComment.created_at.desc()).all()
+    return (
+        db.query(TaskComment)
+        .options(joinedload(TaskComment.user))
+        .filter(TaskComment.task_id == task_id)
+        .order_by(TaskComment.created_at.desc())
+        .all()
+    )
 
 
 @router.get("/{task_id}/history", response_model=list[HistoryOut])

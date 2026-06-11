@@ -11,9 +11,14 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [, setTick] = useState(0)
 
   async function load() {
-    setTask(await api(`/tasks/${taskId}`))
-    setComments(await api(`/tasks/${taskId}/comments`))
-    setHistory(await api(`/tasks/${taskId}/history`))
+    const [nextTask, nextComments, nextHistory] = await Promise.all([
+      api(`/tasks/${taskId}`),
+      api(`/tasks/${taskId}/comments`),
+      api(`/tasks/${taskId}/history`),
+    ])
+    setTask(nextTask)
+    setComments(nextComments)
+    setHistory(nextHistory)
   }
 
   useEffect(() => { load() }, [taskId])

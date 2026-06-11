@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .models import Task, User, UserRole
 
@@ -23,7 +23,12 @@ def can_access_task(user: User, task: Task) -> bool:
 
 
 def get_visible_task_or_403(db: Session, task_id: int, user: User) -> Task:
-    task = db.query(Task).filter(Task.id == task_id, Task.deleted_at.is_(None)).first()
+    task = (
+        db.query(Task)
+        .options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason))
+        .filter(Task.id == task_id, Task.deleted_at.is_(None))
+        .first()
+    )
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     if not can_access_task(user, task):
