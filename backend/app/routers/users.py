@@ -52,7 +52,12 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "username" in data and db.query(User).filter(User.username == data["username"], User.id != user_id).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
+    if user_id == current_user.id and (data.get("role") not in {None, current_user.role} or data.get("is_active") is False):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot remove your own admin access")
+    for key, value in data.items():
         setattr(user, key, value)
     db.commit()
     db.refresh(user)
@@ -62,6 +67,8 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
 @router.patch("/{user_id}/deactivate", response_model=UserOut)
 def deactivate_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_admin(current_user)
+    if user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate your own account")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

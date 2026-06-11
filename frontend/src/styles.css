@@ -265,6 +265,58 @@ small,
   gap: 12px;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.row-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.danger-subtle {
+  color: #b42318;
+  background: #fff5f5;
+  border-color: #f0c7c7;
+}
+
+.user-modal {
+  width: min(680px, 100%);
+}
+
+.password-modal {
+  width: min(480px, 100%);
+}
+
+.modal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.toggle-label {
+  display: flex;
+  grid-column: span 2;
+  align-items: center;
+  gap: 9px;
+  padding: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.toggle-label input {
+  width: 18px;
+  margin: 0;
+}
+
 .briefing-head h2 {
   margin: 0;
   font-size: 22px;
@@ -830,6 +882,14 @@ th {
   .briefing-task {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .modal-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-label {
+    grid-column: span 1;
   }
 }
 
