@@ -1102,9 +1102,22 @@ textarea:focus {
 }
 
 .sidebar-user .icon-button {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 0;
   color: #9fb1c5;
   background: transparent;
   border-color: transparent;
+}
+
+.sidebar-user .icon-button svg {
+  display: block;
+  margin: 0;
 }
 
 .sidebar-user .icon-button:hover {
