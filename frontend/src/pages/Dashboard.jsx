@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusLabels } from '../utils/labels'
-import { statusChangePayload } from '../utils/tasks'
+import { optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 import { AlertTriangle, CheckCircle2, Clock3, ListTodo, PlayCircle } from 'lucide-react'
 
 export default function Dashboard({ user, openTask, createTask }) {
@@ -33,19 +33,40 @@ export default function Dashboard({ user, openTask, createTask }) {
     delayed: tasks.filter((task) => task.status === 'delayed' || (new Date(task.due_date) < new Date() && !['done', 'cancelled'].includes(task.status))).length,
   }), [tasks])
 
+  function reconcileTask(updatedTask) {
+    setTasks((current) => {
+      if (status && updatedTask.status !== status) return current.filter((item) => item.id !== updatedTask.id)
+      return replaceTask(current, updatedTask)
+    })
+  }
+
   async function updateStatus(task, nextStatus) {
     const payload = statusChangePayload(task, nextStatus)
     if (!payload) return
-    await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
-    load()
+    reconcileTask(optimisticStatusTask(task, payload))
+    setError('')
+    try {
+      const updatedTask = await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
+      reconcileTask(updatedTask)
+    } catch (err) {
+      reconcileTask(task)
+      setError(err.message)
+    }
   }
 
   async function saveOverrunReason(task, reason) {
-    await api(`/tasks/${task.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: task.status, overrun_reason_text: reason }),
-    })
-    load()
+    const payload = { status: task.status, overrun_reason_text: reason }
+    reconcileTask({ ...task, overrun_reason_text: reason })
+    try {
+      const updatedTask = await api(`/tasks/${task.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      reconcileTask(updatedTask)
+    } catch (err) {
+      reconcileTask(task)
+      setError(err.message)
+    }
   }
 
   return (

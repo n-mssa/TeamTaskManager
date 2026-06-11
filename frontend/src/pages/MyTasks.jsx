@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusOptions } from '../utils/labels'
-import { statusChangePayload } from '../utils/tasks'
+import { optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 
 export default function MyTasks({ openTask }) {
   const [tasks, setTasks] = useState([])
@@ -31,16 +31,30 @@ export default function MyTasks({ openTask }) {
   async function updateStatus(task, status) {
     const payload = statusChangePayload(task, status)
     if (!payload) return
-    await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
-    load()
+    setTasks((current) => replaceTask(current, optimisticStatusTask(task, payload)))
+    setError('')
+    try {
+      const updatedTask = await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
+      setTasks((current) => replaceTask(current, updatedTask))
+    } catch (err) {
+      setTasks((current) => replaceTask(current, task))
+      setError(err.message)
+    }
   }
 
   async function saveOverrunReason(task, reason) {
-    await api(`/tasks/${task.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: task.status, overrun_reason_text: reason }),
-    })
-    load()
+    const payload = { status: task.status, overrun_reason_text: reason }
+    setTasks((current) => replaceTask(current, { ...task, overrun_reason_text: reason }))
+    try {
+      const updatedTask = await api(`/tasks/${task.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      setTasks((current) => replaceTask(current, updatedTask))
+    } catch (err) {
+      setTasks((current) => replaceTask(current, task))
+      setError(err.message)
+    }
   }
 
   return (

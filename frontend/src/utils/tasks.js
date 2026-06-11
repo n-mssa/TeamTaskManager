@@ -38,3 +38,19 @@ export function statusChangePayload(task, nextStatus) {
 
   return payload
 }
+
+export function optimisticStatusTask(task, payload) {
+  const now = new Date().toISOString()
+  return {
+    ...task,
+    ...payload,
+    status: payload.status,
+    timer_started_at: payload.status === 'in_progress' ? task.timer_started_at || now : null,
+    started_at: payload.status === 'in_progress' ? task.started_at || now : task.started_at,
+    completed_at: payload.status === 'done' ? task.completed_at || now : null,
+  }
+}
+
+export function replaceTask(tasks, updatedTask) {
+  return tasks.map((task) => task.id === updatedTask.id ? updatedTask : task)
+}
