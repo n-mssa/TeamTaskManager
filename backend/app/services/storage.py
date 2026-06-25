@@ -23,8 +23,13 @@ def _storage_config():
 
 
 def _headers(key: str, content_type: str | None = None):
-    headers = {"apikey": key}
-    if not key.startswith("sb_secret_"):
+    headers = {
+        "apikey": key,
+        "User-Agent": "TeamTaskManagerBackend/1.0",
+    }
+    if key.startswith("sb_secret_"):
+        headers["Authorization"] = key
+    else:
         headers["Authorization"] = f"Bearer {key}"
     if content_type:
         headers["Content-Type"] = content_type
@@ -42,6 +47,23 @@ def _object_url(base_url: str, bucket: str, object_path: str):
     return f"{base_url}/storage/v1/object/{encoded_bucket}/{encoded_path}"
 
 
+def check_storage():
+    base_url, key, bucket = _storage_config()
+    request = Request(
+        f"{base_url}/storage/v1/bucket/{quote(bucket, safe='')}",
+        headers=_headers(key),
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            response.read()
+            return {"status": "ok", "bucket": bucket}
+    except HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_error_detail("Supabase Storage check failed", exc)) from exc
+    except URLError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Supabase Storage check failed: {exc.reason}") from exc
+
+
 def upload_object(object_path: str, content: bytes, content_type: str | None):
     base_url, key, bucket = _storage_config()
     request = Request(
@@ -56,7 +78,7 @@ def upload_object(object_path: str, content: bytes, content_type: str | None):
     except HTTPError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_error_detail("Supabase upload failed", exc)) from exc
     except URLError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Supabase upload failed") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Supabase upload failed: {exc.reason}") from exc
 
 
 def download_object(object_path: str):
@@ -70,7 +92,7 @@ def download_object(object_path: str):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found") from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_error_detail("Supabase download failed", exc)) from exc
     except URLError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Supabase download failed") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Supabase download failed: {exc.reason}") from exc
 
 
 def delete_objects(object_paths: list[str]):

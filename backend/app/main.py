@@ -8,6 +8,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from .database import Base, engine
 from .migrations import apply_migrations
 from .routers import auth, delay_reasons, departments, reports, tasks, users
+from .services.storage import check_storage
 
 load_dotenv()
 
@@ -34,6 +35,11 @@ def create_tables():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/storage")
+def storage_health():
+    return check_storage()
 
 
 app.include_router(auth.router)
