@@ -23,13 +23,17 @@ def _storage_config():
 
 
 def _headers(key: str, content_type: str | None = None):
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "apikey": key,
-    }
+    headers = {"apikey": key}
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key}"
     if content_type:
         headers["Content-Type"] = content_type
     return headers
+
+
+def _error_detail(prefix: str, exc: HTTPError):
+    body = exc.read().decode("utf-8", errors="replace").strip()
+    return f"{prefix} ({exc.code}): {body or exc.reason}"
 
 
 def _object_url(base_url: str, bucket: str, object_path: str):
@@ -50,8 +54,7 @@ def upload_object(object_path: str, content: bytes, content_type: str | None):
         with urlopen(request, timeout=30) as response:
             response.read()
     except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace") or str(exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Supabase upload failed: {detail}") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_error_detail("Supabase upload failed", exc)) from exc
     except URLError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Supabase upload failed") from exc
 
@@ -65,8 +68,7 @@ def download_object(object_path: str):
     except HTTPError as exc:
         if exc.code == 404:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found") from exc
-        detail = exc.read().decode("utf-8", errors="replace") or str(exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Supabase download failed: {detail}") from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_error_detail("Supabase download failed", exc)) from exc
     except URLError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Supabase download failed") from exc
 
