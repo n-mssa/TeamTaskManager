@@ -7,6 +7,7 @@ __pycache__/
 node_modules/
 dist/
 .pytest_cache/
+backend/uploads/
 
 # AI assistant and agent workspace files
 .agents/

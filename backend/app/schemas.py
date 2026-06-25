@@ -141,6 +141,17 @@ class TaskDelete(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class TaskAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    task_id: int
+    uploaded_by_user_id: int
+    original_filename: str
+    content_type: Optional[str]
+    size_bytes: int
+    created_at: datetime
+
+
 class TaskOut(TaskBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -156,6 +167,7 @@ class TaskOut(TaskBase):
     assignee: Optional[UserOut] = None
     department: Optional[DepartmentOut] = None
     delay_reason: Optional[DelayReasonOut] = None
+    attachments: list[TaskAttachmentOut] = Field(default_factory=list)
 
 
 class CommentCreate(BaseModel):

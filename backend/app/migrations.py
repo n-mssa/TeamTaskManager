@@ -20,6 +20,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_tasks_created_active ON tasks (created_at) WHERE deleted_at IS NULL",
     "CREATE INDEX IF NOT EXISTS ix_task_comments_task_created ON task_comments (task_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_task_history_task_changed ON task_status_history (task_id, changed_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_task_attachments_task_created ON task_attachments (task_id, created_at DESC)",
 ]
 
 
@@ -34,5 +35,19 @@ def apply_migrations():
             )
         )
         connection.execute(text("ALTER TABLE task_status_history ADD COLUMN IF NOT EXISTS reason_text TEXT"))
+        connection.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS task_attachments ("
+                "id SERIAL PRIMARY KEY, "
+                "task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, "
+                "uploaded_by_user_id INTEGER NOT NULL REFERENCES users(id), "
+                "original_filename VARCHAR(255) NOT NULL, "
+                "stored_filename VARCHAR(255) NOT NULL UNIQUE, "
+                "content_type VARCHAR(255), "
+                "size_bytes INTEGER NOT NULL, "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                ")"
+            )
+        )
         for statement in INDEXES:
             connection.execute(text(statement))

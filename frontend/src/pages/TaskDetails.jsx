@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { API_BASE_URL, api, getToken } from '../api/client'
 import { priorityLabels, statusLabels } from '../utils/labels'
 import { elapsedSeconds, formatDuration } from '../utils/tasks'
+
+function formatFileSize(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}
 
 export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [task, setTask] = useState(null)
@@ -43,6 +49,20 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     onDeleted()
   }
 
+  async function downloadAttachment(attachment) {
+    const response = await fetch(`${API_BASE_URL}/tasks/${task.id}/attachments/${attachment.id}/download`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+    if (!response.ok) return
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.original_filename
+    link.click()
+    window.URL.revokeObjectURL(url)
+  }
+
   if (!task) return <div className="empty">جار التحميل...</div>
   return (
     <section>
@@ -65,6 +85,21 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <div><span>أنجزت في</span><strong>{task.completed_at || '-'}</strong></div>
       </div>
       <article className="panel"><h2>الوصف</h2><p>{task.description || 'لا يوجد وصف.'}</p></article>
+      <article className="panel">
+        <h2>المرفقات</h2>
+        {task.attachments?.length ? (
+          <div className="attachment-list">
+            {task.attachments.map((attachment) => (
+              <button key={attachment.id} type="button" onClick={() => downloadAttachment(attachment)}>
+                <strong>{attachment.original_filename}</strong>
+                <small>{formatFileSize(attachment.size_bytes)}</small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p>لا توجد مرفقات.</p>
+        )}
+      </article>
       <article className="panel"><h2>سبب التأخير</h2><p>{task.delay_reason?.name_ar || task.delay_reason_text || 'لا يوجد.'}</p></article>
       <article className="panel"><h2>سبب الانتظار</h2><p>{task.hold_reason_text || 'لا يوجد.'}</p></article>
       <article className="panel"><h2>سبب تجاوز الوقت المتوقع</h2><p>{task.overrun_reason_text || 'لا يوجد.'}</p></article>

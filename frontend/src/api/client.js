@@ -43,7 +43,8 @@ export async function api(path, options = {}) {
 }
 
 async function requestApi(path, options) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  const isFormData = options.body instanceof FormData
+  const headers = { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...(options.headers || {}) }
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })

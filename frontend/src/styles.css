@@ -1417,6 +1417,36 @@ tbody tr:hover td {
   padding: 22px;
 }
 
+.file-upload input {
+  padding: 9px;
+}
+
+.file-upload span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.attachment-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: right;
+}
+
+.attachment-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .details-grid {
   gap: 14px;
 }

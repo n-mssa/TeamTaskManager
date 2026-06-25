@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { priorityOptions, statusOptions } from '../utils/labels'
 
+const maxAttachments = 3
+const maxAttachmentBytes = 10 * 1024 * 1024
+
 const emptyTask = {
   title: '',
   description: '',
@@ -22,6 +25,7 @@ export default function TaskForm({ taskId, onSaved }) {
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
   const [delayReasons, setDelayReasons] = useState([])
+  const [attachments, setAttachments] = useState([])
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -48,6 +52,31 @@ export default function TaskForm({ taskId, onSaved }) {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function chooseAttachments(event) {
+    const files = Array.from(event.target.files || [])
+    if (files.length > maxAttachments) {
+      setError('يمكنك رفع 3 ملفات كحد أقصى.')
+      event.target.value = ''
+      setAttachments([])
+      return
+    }
+    const oversized = files.find((file) => file.size > maxAttachmentBytes)
+    if (oversized) {
+      setError('يجب أن يكون حجم كل ملف 10 ميجابايت أو أقل.')
+      event.target.value = ''
+      setAttachments([])
+      return
+    }
+    setError('')
+    setAttachments(files)
+  }
+
+  function appendPayload(formData, payload) {
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) formData.append(key, value)
+    })
+  }
+
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -67,6 +96,17 @@ export default function TaskForm({ taskId, onSaved }) {
       manager_notes: form.manager_notes || null,
     }
     try {
+      if (!taskId && attachments.length) {
+        const formData = new FormData()
+        appendPayload(formData, payload)
+        attachments.forEach((file) => formData.append('attachments', file))
+        await api('/tasks/with-attachments', {
+          method: 'POST',
+          body: formData,
+        })
+        onSaved()
+        return
+      }
       await api(taskId ? `/tasks/${taskId}` : '/tasks', {
         method: taskId ? 'PUT' : 'POST',
         body: JSON.stringify(payload),
@@ -101,6 +141,14 @@ export default function TaskForm({ taskId, onSaved }) {
         {form.status === 'blocked' && <label className="span-2">سبب الانتظار<textarea required value={form.hold_reason_text || ''} onChange={(e) => setValue('hold_reason_text', e.target.value)} /></label>}
         <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>
         <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>
+        {!taskId && (
+          <label className="span-2 file-upload">
+            المرفقات
+            <input type="file" multiple onChange={chooseAttachments} />
+            <small>حتى 3 ملفات، 10 ميجابايت لكل ملف.</small>
+            {attachments.length > 0 && <span>{attachments.map((file) => file.name).join(', ')}</span>}
+          </label>
+        )}
         {error && <p className="error span-2">{error}</p>}
         <button className="primary span-2">حفظ</button>
       </form>

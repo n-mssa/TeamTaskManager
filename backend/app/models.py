@@ -109,6 +109,7 @@ class Task(Base):
     deleted_by = relationship("User", foreign_keys=[deleted_by_user_id])
     comments = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan")
     history = relationship("TaskStatusHistory", back_populates="task", cascade="all, delete-orphan")
+    attachments = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan")
 
     @property
     def elapsed_seconds(self):
@@ -134,6 +135,22 @@ class TaskComment(Base):
 
     task = relationship("Task", back_populates="comments")
     user = relationship("User")
+
+
+class TaskAttachment(Base):
+    __tablename__ = "task_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False, unique=True)
+    content_type = Column(String(255), nullable=True)
+    size_bytes = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    task = relationship("Task", back_populates="attachments")
+    uploaded_by = relationship("User")
 
 
 class TaskStatusHistory(Base):

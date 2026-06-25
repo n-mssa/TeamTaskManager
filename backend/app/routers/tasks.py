@@ -1,20 +1,33 @@
+import re
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Task, TaskComment, TaskStatus, TaskStatusHistory, User, UserRole
+from ..models import Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
 from ..schemas import CommentCreate, CommentOut, HistoryOut, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
+MAX_TASK_ATTACHMENTS = 3
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+ATTACHMENT_DIR = Path(__file__).resolve().parents[2] / "uploads" / "task_attachments"
+
 
 def visible_task_query(db: Session, user: User):
-    query = db.query(Task).options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason))
+    query = db.query(Task).options(
+        joinedload(Task.assignee),
+        joinedload(Task.department),
+        joinedload(Task.delay_reason),
+        joinedload(Task.attachments),
+    )
     query = query.filter(Task.deleted_at.is_(None))
     if user.role == UserRole.employee:
         query = query.filter(Task.assigned_to_user_id == user.id)
@@ -79,6 +92,50 @@ def apply_status_effects(task: Task, old_status: Optional[TaskStatus], new_statu
         )
 
 
+def clean_filename(filename: str):
+    name = Path(filename or "attachment").name.strip()
+    return re.sub(r"[^A-Za-z0-9._ -]", "_", name)[:255] or "attachment"
+
+
+def persist_attachment_file(upload: UploadFile):
+    ATTACHMENT_DIR.mkdir(parents=True, exist_ok=True)
+    original_filename = clean_filename(upload.filename or "attachment")
+    stored_filename = f"{uuid4().hex}_{original_filename}"
+    target = ATTACHMENT_DIR / stored_filename
+    size = 0
+    with target.open("wb") as output:
+        while chunk := upload.file.read(1024 * 1024):
+            size += len(chunk)
+            if size > MAX_ATTACHMENT_BYTES:
+                output.close()
+                target.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="يجب أن يكون حجم كل مرفق 10 ميجابايت أو أقل",
+                )
+            output.write(chunk)
+    return original_filename, stored_filename, size
+
+
+def create_task_record(payload: TaskCreate, db: Session, current_user: User):
+    assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
+    if not assignee or not assignee.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee must be an active user")
+    assert_can_manage_task_payload(current_user, payload.department_id, assignee)
+    validate_status_reasons(
+        None,
+        payload.status,
+        payload.delay_reason_id,
+        payload.delay_reason_text,
+        payload.hold_reason_text,
+        payload.overrun_reason_text,
+    )
+    task = Task(**payload.model_dump(), created_by_user_id=current_user.id)
+    apply_status_effects(task, None, task.status, current_user, db)
+    db.add(task)
+    return task
+
+
 @router.get("", response_model=list[TaskOut])
 def list_tasks(
     status_filter: Optional[TaskStatus] = Query(default=None, alias="status"),
@@ -108,22 +165,71 @@ def list_tasks(
 
 @router.post("", response_model=TaskOut)
 def create_task(payload: TaskCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
-    if not assignee or not assignee.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee must be an active user")
-    assert_can_manage_task_payload(current_user, payload.department_id, assignee)
-    validate_status_reasons(
-        None,
-        payload.status,
-        payload.delay_reason_id,
-        payload.delay_reason_text,
-        payload.hold_reason_text,
-        payload.overrun_reason_text,
-    )
-    task = Task(**payload.model_dump(), created_by_user_id=current_user.id)
-    apply_status_effects(task, None, task.status, current_user, db)
-    db.add(task)
+    task = create_task_record(payload, db, current_user)
     db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.post("/with-attachments", response_model=TaskOut)
+def create_task_with_attachments(
+    title: str = Form(...),
+    description: Optional[str] = Form(default=None),
+    department_id: int = Form(...),
+    assigned_to_user_id: int = Form(...),
+    priority: TaskPriority = Form(default=TaskPriority.normal),
+    status_value: TaskStatus = Form(default=TaskStatus.pending, alias="status"),
+    expected_minutes: int = Form(...),
+    due_date: date = Form(...),
+    delay_reason_id: Optional[int] = Form(default=None),
+    delay_reason_text: Optional[str] = Form(default=None),
+    hold_reason_text: Optional[str] = Form(default=None),
+    overrun_reason_text: Optional[str] = Form(default=None),
+    manager_notes: Optional[str] = Form(default=None),
+    attachments: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if len(attachments) > MAX_TASK_ATTACHMENTS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="يمكنك رفع 3 مرفقات كحد أقصى")
+    payload = TaskCreate(
+        title=title,
+        description=description,
+        department_id=department_id,
+        assigned_to_user_id=assigned_to_user_id,
+        priority=priority,
+        status=status_value,
+        expected_minutes=expected_minutes,
+        due_date=due_date,
+        delay_reason_id=delay_reason_id,
+        delay_reason_text=delay_reason_text,
+        hold_reason_text=hold_reason_text,
+        overrun_reason_text=overrun_reason_text,
+        manager_notes=manager_notes,
+    )
+    task = create_task_record(payload, db, current_user)
+    saved_files = []
+    try:
+        db.flush()
+        for upload in attachments:
+            original_filename, stored_filename, size = persist_attachment_file(upload)
+            saved_files.append(stored_filename)
+            db.add(
+                TaskAttachment(
+                    task_id=task.id,
+                    uploaded_by_user_id=current_user.id,
+                    original_filename=original_filename,
+                    stored_filename=stored_filename,
+                    content_type=upload.content_type,
+                    size_bytes=size,
+                )
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        for filename in saved_files:
+            (ATTACHMENT_DIR / filename).unlink(missing_ok=True)
+        raise
     db.refresh(task)
     return task
 
@@ -131,6 +237,18 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db), current_user
 @router.get("/{task_id}", response_model=TaskOut)
 def get_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return get_visible_task_or_403(db, task_id, current_user)
+
+
+@router.get("/{task_id}/attachments/{attachment_id}/download")
+def download_attachment(task_id: int, attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    get_visible_task_or_403(db, task_id, current_user)
+    attachment = db.query(TaskAttachment).filter(TaskAttachment.id == attachment_id, TaskAttachment.task_id == task_id).first()
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+    path = ATTACHMENT_DIR / attachment.stored_filename
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found")
+    return FileResponse(path, media_type=attachment.content_type, filename=attachment.original_filename)
 
 
 @router.put("/{task_id}", response_model=TaskOut)
