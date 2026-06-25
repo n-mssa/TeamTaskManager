@@ -1,7 +1,7 @@
 import json
 from os import getenv
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from fastapi import HTTPException, status
@@ -22,6 +22,25 @@ def _storage_config():
             detail="Supabase Storage is not configured",
         )
     return url, key, bucket
+
+
+def storage_config_status():
+    try:
+        url, key, bucket = _storage_config()
+    except HTTPException as exc:
+        return {
+            "configured": False,
+            "error": exc.detail,
+        }
+    parsed = urlparse(url)
+    return {
+        "configured": True,
+        "supabase_host": parsed.netloc or parsed.path,
+        "supabase_url_has_rest_suffix": url.endswith("/rest/v1"),
+        "bucket": bucket,
+        "has_secret_key": bool(key),
+        "secret_key_prefix": key[:9] if key else None,
+    }
 
 
 def _headers(key: str, content_type: str | None = None):
