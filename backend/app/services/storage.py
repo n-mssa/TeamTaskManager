@@ -12,6 +12,8 @@ DEFAULT_BUCKET = "task-attachments"
 
 def _storage_config():
     url = (getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    if url.endswith("/rest/v1"):
+        url = url[: -len("/rest/v1")]
     key = (getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
     bucket = (getenv("SUPABASE_STORAGE_BUCKET") or DEFAULT_BUCKET).strip()
     if not url or not key:
