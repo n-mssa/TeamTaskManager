@@ -11,9 +11,9 @@ DEFAULT_BUCKET = "task-attachments"
 
 
 def _storage_config():
-    url = (getenv("SUPABASE_URL") or "").rstrip("/")
-    key = getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
-    bucket = getenv("SUPABASE_STORAGE_BUCKET") or DEFAULT_BUCKET
+    url = (getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    key = (getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    bucket = (getenv("SUPABASE_STORAGE_BUCKET") or DEFAULT_BUCKET).strip()
     if not url or not key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
