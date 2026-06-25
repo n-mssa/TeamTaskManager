@@ -20,7 +20,18 @@ postgresql://postgres.PROJECT_REF:DB_PASSWORD@aws-0-REGION.pooler.supabase.com:5
 Do not commit this URL. The backend automatically converts provider-supplied
 `postgresql://` URLs to the installed Psycopg 3 SQLAlchemy driver.
 
-## 2. Deploy from GitHub on Render
+## 2. Create the Supabase Storage bucket
+
+1. In Supabase, open **Storage**.
+2. Create a private bucket named `task-attachments`.
+3. In **Project Settings > API**, copy:
+   - Project URL for `SUPABASE_URL`
+   - `service_role` key for `SUPABASE_SERVICE_ROLE_KEY`
+
+Do not put the service role key in frontend environment variables. It belongs
+only on the backend service.
+
+## 3. Deploy from GitHub on Render
 
 1. Push this repository to GitHub.
 2. In Render, create a new **Blueprint** and select the repository.
@@ -31,6 +42,9 @@ Do not commit this URL. The backend automatically converts provider-supplied
    - API `DATABASE_URL`: the Supabase Session pooler URL
    - API `CORS_ORIGINS`: the final frontend URL, such as
      `https://team-task-manager.onrender.com`
+   - API `SUPABASE_URL`: your Supabase project URL
+   - API `SUPABASE_SERVICE_ROLE_KEY`: your Supabase service role key
+   - API `SUPABASE_STORAGE_BUCKET`: `task-attachments`
    - Frontend `VITE_API_BASE_URL`: the final API URL, such as
      `https://team-task-manager-api.onrender.com`
 5. Redeploy both services after entering their final URLs.
@@ -44,7 +58,7 @@ https://YOUR-API.onrender.com/health
 The Blueprint pins the API to Python 3.12 because some pinned backend
 dependencies do not currently build on Python 3.14.
 
-## 3. Add initial data
+## 4. Add initial data
 
 The seed script creates sample users and tasks with known passwords. Only run it
 if you need those sample records, and change the passwords immediately.
@@ -60,9 +74,10 @@ $env:SECRET_KEY="YOUR_DEPLOYED_SECRET_KEY"
 ## Important notes
 
 - Keep `DATABASE_URL` and `SECRET_KEY` only in environment variables.
+- Keep `SUPABASE_SERVICE_ROLE_KEY` only in backend environment variables.
 - Use the Supabase Session pooler, not the direct connection, when the backend
   host does not support IPv6.
-- Supabase is used only as PostgreSQL here. Existing app authentication and
-  authorization remain in FastAPI.
+- Supabase is used for PostgreSQL and private attachment storage. Existing app
+  authentication and authorization remain in FastAPI.
 - The Supabase free database and Render free API are suitable for demos and
   light internal use, but free services may pause or sleep.

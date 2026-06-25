@@ -5,7 +5,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
@@ -13,12 +13,12 @@ from ..database import get_db
 from ..models import Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
 from ..schemas import CommentCreate, CommentOut, HistoryOut, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 MAX_TASK_ATTACHMENTS = 3
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
-ATTACHMENT_DIR = Path(__file__).resolve().parents[2] / "uploads" / "task_attachments"
 
 
 def visible_task_query(db: Session, user: User):
@@ -97,24 +97,20 @@ def clean_filename(filename: str):
     return re.sub(r"[^A-Za-z0-9._ -]", "_", name)[:255] or "attachment"
 
 
-def persist_attachment_file(upload: UploadFile):
-    ATTACHMENT_DIR.mkdir(parents=True, exist_ok=True)
+def read_attachment_file(upload: UploadFile, task_id: int):
     original_filename = clean_filename(upload.filename or "attachment")
-    stored_filename = f"{uuid4().hex}_{original_filename}"
-    target = ATTACHMENT_DIR / stored_filename
+    stored_filename = f"tasks/{task_id}/{uuid4().hex}_{original_filename}"
     size = 0
-    with target.open("wb") as output:
-        while chunk := upload.file.read(1024 * 1024):
-            size += len(chunk)
-            if size > MAX_ATTACHMENT_BYTES:
-                output.close()
-                target.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail="يجب أن يكون حجم كل مرفق 10 ميجابايت أو أقل",
-                )
-            output.write(chunk)
-    return original_filename, stored_filename, size
+    chunks = []
+    while chunk := upload.file.read(1024 * 1024):
+        size += len(chunk)
+        if size > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="يجب أن يكون حجم كل مرفق 10 ميجابايت أو أقل",
+            )
+        chunks.append(chunk)
+    return original_filename, stored_filename, size, b"".join(chunks)
 
 
 def create_task_record(payload: TaskCreate, db: Session, current_user: User):
@@ -212,7 +208,8 @@ def create_task_with_attachments(
     try:
         db.flush()
         for upload in attachments:
-            original_filename, stored_filename, size = persist_attachment_file(upload)
+            original_filename, stored_filename, size, content = read_attachment_file(upload, task.id)
+            upload_object(stored_filename, content, upload.content_type)
             saved_files.append(stored_filename)
             db.add(
                 TaskAttachment(
@@ -227,8 +224,7 @@ def create_task_with_attachments(
         db.commit()
     except Exception:
         db.rollback()
-        for filename in saved_files:
-            (ATTACHMENT_DIR / filename).unlink(missing_ok=True)
+        delete_objects(saved_files)
         raise
     db.refresh(task)
     return task
@@ -245,10 +241,13 @@ def download_attachment(task_id: int, attachment_id: int, db: Session = Depends(
     attachment = db.query(TaskAttachment).filter(TaskAttachment.id == attachment_id, TaskAttachment.task_id == task_id).first()
     if not attachment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
-    path = ATTACHMENT_DIR / attachment.stored_filename
-    if not path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found")
-    return FileResponse(path, media_type=attachment.content_type, filename=attachment.original_filename)
+    content, content_type = download_object(attachment.stored_filename)
+    safe_filename = attachment.original_filename.replace('"', "")
+    return Response(
+        content,
+        media_type=attachment.content_type or content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+    )
 
 
 @router.put("/{task_id}", response_model=TaskOut)
