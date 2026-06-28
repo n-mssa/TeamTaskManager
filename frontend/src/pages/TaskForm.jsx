@@ -27,6 +27,7 @@ export default function TaskForm({ taskId, onSaved }) {
   const [delayReasons, setDelayReasons] = useState([])
   const [attachments, setAttachments] = useState([])
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     const requests = [
@@ -79,6 +80,8 @@ export default function TaskForm({ taskId, onSaved }) {
 
   async function submit(event) {
     event.preventDefault()
+    if (saving) return
+    setSaving(true)
     setError('')
     const payload = {
       title: form.title,
@@ -114,6 +117,8 @@ export default function TaskForm({ taskId, onSaved }) {
       onSaved()
     } catch (err) {
       setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -150,7 +155,7 @@ export default function TaskForm({ taskId, onSaved }) {
           </label>
         )}
         {error && <p className="error span-2">{error}</p>}
-        <button className="primary span-2">حفظ</button>
+        <button className="primary span-2" disabled={saving}>{saving ? 'جار الحفظ...' : 'حفظ'}</button>
       </form>
     </section>
   )
