@@ -68,7 +68,7 @@ export default function MyTasks({ user, openTask }) {
         <button className={filter === 'overdue' ? 'active' : ''} onClick={() => setFilter('overdue')}>متأخرة عن موعدها</button>
       </div>
       {error && <p className="error">{error}</p>}
-      <KanbanBoard tasks={visible} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />
+      <KanbanBoard tasks={visible} user={user} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />
     </section>
   )
 }

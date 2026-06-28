@@ -4,7 +4,7 @@ import { boardColumns, priorityLabels } from '../utils/labels'
 import { elapsedSeconds, formatDuration } from '../utils/tasks'
 import EmptyState from './EmptyState'
 
-export default function KanbanBoard({ tasks, onOpen, onMove, onOverrun }) {
+export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) {
   const [, setTick] = useState(0)
   const promptedOverruns = useRef(new Set())
   useEffect(() => {
@@ -12,17 +12,18 @@ export default function KanbanBoard({ tasks, onOpen, onMove, onOverrun }) {
       setTick((value) => value + 1)
       tasks.forEach((task) => {
         const needsReason = task.status === 'in_progress'
+          && user?.id === task.assigned_to_user_id
           && elapsedSeconds(task) > task.expected_minutes * 60
           && !task.overrun_reason_text
           && !promptedOverruns.current.has(task.id)
         if (!needsReason) return
         promptedOverruns.current.add(task.id)
-        const reason = window.prompt('تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز')
+        const reason = window.prompt(`تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز:\n${task.title}`)
         if (reason?.trim()) onOverrun(task, reason.trim())
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [tasks, onOverrun])
+  }, [tasks, user, onOverrun])
 
   if (!tasks.length) return <EmptyState title="لا توجد مهام مطابقة" description="جرّب تغيير عوامل التصفية أو إنشاء مهمة جديدة." />
 

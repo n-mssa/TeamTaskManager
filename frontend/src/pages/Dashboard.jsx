@@ -93,7 +93,7 @@ export default function Dashboard({ user, openTask, createTask }) {
         <input value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} placeholder="رقم الموظف" />
       </div>
       {error && <p className="error">{error}</p>}
-      <KanbanBoard tasks={tasks} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />
+      <KanbanBoard tasks={tasks} user={user} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />
     </section>
   )
 }
