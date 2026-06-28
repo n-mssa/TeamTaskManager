@@ -124,7 +124,7 @@ export default function App() {
           </div>
         </header>
         <div className="page-content">
-          {route === 'my-tasks' && <MyTasks openTask={openTask} />}
+          {route === 'my-tasks' && <MyTasks user={user} openTask={openTask} />}
           {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
           {route === 'task-form' && <TaskForm taskId={selectedTask} onSaved={() => setRoute(defaultRoute(user.role))} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}

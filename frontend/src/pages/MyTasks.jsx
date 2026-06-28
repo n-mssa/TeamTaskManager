@@ -4,7 +4,7 @@ import KanbanBoard from '../components/KanbanBoard'
 import { statusOptions } from '../utils/labels'
 import { optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 
-export default function MyTasks({ openTask }) {
+export default function MyTasks({ user, openTask }) {
   const [tasks, setTasks] = useState([])
   const [filter, setFilter] = useState('all')
   const [error, setError] = useState('')
@@ -29,7 +29,7 @@ export default function MyTasks({ openTask }) {
   }, [filter, tasks])
 
   async function updateStatus(task, status) {
-    const payload = statusChangePayload(task, status)
+    const payload = statusChangePayload(task, status, user)
     if (!payload) return
     setTasks((current) => replaceTask(current, optimisticStatusTask(task, payload)))
     setError('')

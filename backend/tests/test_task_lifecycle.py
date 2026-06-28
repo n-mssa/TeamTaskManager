@@ -35,6 +35,9 @@ class TaskLifecycleTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             validate_status_reasons(running_task(), TaskStatus.done, None, None, None, None)
 
+    def test_overrun_reason_is_not_required_for_non_assignee_manager_move(self):
+        validate_status_reasons(running_task(), TaskStatus.done, None, None, None, None, require_overrun_reason=False)
+
     def test_hold_reason_is_required_for_blocked_status(self):
         with self.assertRaises(HTTPException):
             validate_status_reasons(running_task(), TaskStatus.blocked, None, None, None, "Overrun reason")

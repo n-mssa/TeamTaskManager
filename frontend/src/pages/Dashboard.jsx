@@ -41,7 +41,7 @@ export default function Dashboard({ user, openTask, createTask }) {
   }
 
   async function updateStatus(task, nextStatus) {
-    const payload = statusChangePayload(task, nextStatus)
+    const payload = statusChangePayload(task, nextStatus, user)
     if (!payload) return
     reconcileTask(optimisticStatusTask(task, payload))
     setError('')

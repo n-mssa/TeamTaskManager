@@ -14,24 +14,26 @@ export function formatDuration(totalSeconds) {
   return `${hours ? `${hours}س ` : ''}${minutes}د ${rest}ث`
 }
 
-export function statusChangePayload(task, nextStatus) {
+export function statusChangePayload(task, nextStatus, user) {
   const payload = { status: nextStatus }
+  const taskTitle = task.title ? `\n${task.title}` : ''
 
   if (nextStatus === 'blocked') {
-    const reason = window.prompt('سبب وضع المهمة قيد الانتظار')
+    const reason = window.prompt(`سبب وضع المهمة قيد الانتظار:${taskTitle}`)
     if (!reason?.trim()) return null
     payload.hold_reason_text = reason.trim()
   }
 
   if (nextStatus === 'delayed') {
-    const reason = window.prompt('سبب التأخير')
+    const reason = window.prompt(`سبب تأخير المهمة:${taskTitle}`)
     if (!reason?.trim()) return null
     payload.delay_reason_text = reason.trim()
   }
 
   const exceededExpected = elapsedSeconds(task) > task.expected_minutes * 60
-  if (task.status === 'in_progress' && nextStatus !== 'in_progress' && exceededExpected && !task.overrun_reason_text) {
-    const reason = window.prompt('تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز')
+  const isAssignee = user?.id === task.assigned_to_user_id
+  if (isAssignee && task.status === 'in_progress' && nextStatus !== 'in_progress' && exceededExpected && !task.overrun_reason_text) {
+    const reason = window.prompt(`تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز:${taskTitle}`)
     if (!reason?.trim()) return null
     payload.overrun_reason_text = reason.trim()
   }

@@ -43,6 +43,7 @@ def validate_status_reasons(
     delay_reason_text: Optional[str],
     hold_reason_text: Optional[str],
     overrun_reason_text: Optional[str],
+    require_overrun_reason: bool = True,
 ):
     if status_value == TaskStatus.delayed and not delay_reason_id and not delay_reason_text:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Delay reason is required when status is delayed")
@@ -50,6 +51,7 @@ def validate_status_reasons(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Hold reason is required when status is blocked")
     if (
         task
+        and require_overrun_reason
         and task.status == TaskStatus.in_progress
         and status_value != TaskStatus.in_progress
         and task.is_over_expected
@@ -270,6 +272,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
         data.get("delay_reason_text", task.delay_reason_text),
         data.get("hold_reason_text", task.hold_reason_text),
         data.get("overrun_reason_text", task.overrun_reason_text),
+        current_user.id == task.assigned_to_user_id,
     )
     old_status = task.status
     for key, value in data.items():
@@ -290,6 +293,7 @@ def update_status(task_id: int, payload: TaskStatusUpdate, db: Session = Depends
         payload.delay_reason_text,
         payload.hold_reason_text or task.hold_reason_text,
         payload.overrun_reason_text or task.overrun_reason_text,
+        current_user.id == task.assigned_to_user_id,
     )
     old_status = task.status
     task.status = payload.status
