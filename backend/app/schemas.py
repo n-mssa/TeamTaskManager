@@ -106,7 +106,7 @@ class TaskBase(BaseModel):
     priority: TaskPriority = TaskPriority.normal
     status: TaskStatus = TaskStatus.pending
     expected_minutes: int = Field(gt=0)
-    due_date: date
+    due_date: date = Field(default_factory=date.today)
     delay_reason_id: Optional[int] = None
     delay_reason_text: Optional[str] = None
     hold_reason_text: Optional[str] = None

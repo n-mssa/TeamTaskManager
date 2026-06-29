@@ -157,8 +157,14 @@ def list_tasks(
     if due_to:
         query = query.filter(Task.due_date <= due_to)
     if overdue:
-        query = query.filter(Task.due_date < date.today(), Task.status.notin_([TaskStatus.done, TaskStatus.cancelled]))
-    return query.order_by(Task.due_date.asc(), Task.id.desc()).all()
+        tasks = query.order_by(Task.due_date.desc(), Task.id.desc()).all()
+        return [
+            task
+            for task in tasks
+            if task.status == TaskStatus.delayed
+            or (task.is_over_expected and task.status not in {TaskStatus.done, TaskStatus.cancelled})
+        ]
+    return query.order_by(Task.due_date.desc(), Task.id.desc()).all()
 
 
 @router.post("", response_model=TaskOut)
@@ -178,7 +184,7 @@ def create_task_with_attachments(
     priority: TaskPriority = Form(default=TaskPriority.normal),
     status_value: TaskStatus = Form(default=TaskStatus.pending, alias="status"),
     expected_minutes: int = Form(...),
-    due_date: date = Form(...),
+    due_date: Optional[date] = Form(default=None),
     delay_reason_id: Optional[int] = Form(default=None),
     delay_reason_text: Optional[str] = Form(default=None),
     hold_reason_text: Optional[str] = Form(default=None),
@@ -198,7 +204,7 @@ def create_task_with_attachments(
         priority=priority,
         status=status_value,
         expected_minutes=expected_minutes,
-        due_date=due_date,
+        due_date=due_date or date.today(),
         delay_reason_id=delay_reason_id,
         delay_reason_text=delay_reason_text,
         hold_reason_text=hold_reason_text,

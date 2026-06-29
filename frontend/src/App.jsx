@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, BarChart3, Building2, CalendarDays, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Building2, Clock, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
@@ -11,6 +11,7 @@ import Departments from './pages/Departments'
 import DelayReasons from './pages/DelayReasons'
 import TaskForm from './pages/TaskForm'
 import TaskDetails from './pages/TaskDetails'
+import { formatDuration, isOverExpected, remainingExpectedSeconds } from './utils/tasks'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -218,33 +219,24 @@ function TaskBriefing({ briefing, user, onClose, onOpen }) {
 }
 
 function DueMessage({ task }) {
-  const days = daysFromToday(task.due_date)
-  if (days < 0) return <span className="due-message overdue"><AlertTriangle size={15} /> متأخرة منذ {Math.abs(days)} يوم</span>
-  if (days === 0) return <span className="due-message today"><CalendarDays size={15} /> موعدها اليوم</span>
-  if (days === 1) return <span className="due-message"><CalendarDays size={15} /> موعدها غداً</span>
-  return <span className="due-message"><CalendarDays size={15} /> متبقي {days} أيام</span>
+  const remaining = remainingExpectedSeconds(task)
+  if (remaining < 0) return <span className="due-message overdue"><AlertTriangle size={15} /> تجاوزت المتوقع بـ {formatDuration(Math.abs(remaining))}</span>
+  return <span className="due-message"><Clock size={15} /> متبقي {formatDuration(remaining)}</span>
 }
 
 function rankUrgentTasks(tasks) {
   const priorityRank = { urgent: 0, high: 1, normal: 2, low: 3 }
   return [...tasks].sort((a, b) => {
-    const aDays = daysFromToday(a.due_date)
-    const bDays = daysFromToday(b.due_date)
+    const aRemaining = remainingExpectedSeconds(a)
+    const bRemaining = remainingExpectedSeconds(b)
     if (isOverdue(a) !== isOverdue(b)) return isOverdue(a) ? -1 : 1
     if (priorityRank[a.priority] !== priorityRank[b.priority]) return priorityRank[a.priority] - priorityRank[b.priority]
-    return aDays - bDays
+    return aRemaining - bRemaining
   })
 }
 
 function isOverdue(task) {
-  return daysFromToday(task.due_date) < 0
-}
-
-function daysFromToday(dueDate) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(`${dueDate}T00:00:00`)
-  return Math.round((due - today) / 86400000)
+  return isOverExpected(task)
 }
 
 function ThemePicker({ theme, onThemeChange, className = '' }) {

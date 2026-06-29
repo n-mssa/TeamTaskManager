@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Clock, CalendarDays, GripVertical } from 'lucide-react'
 import { boardColumns, priorityLabels } from '../utils/labels'
-import { elapsedSeconds, formatDuration } from '../utils/tasks'
+import { elapsedSeconds, formatDuration, isOverExpected } from '../utils/tasks'
 import EmptyState from './EmptyState'
 
 export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) {
@@ -67,13 +67,12 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
 }
 
 function TaskCard({ task, onOpen, onDragStart }) {
-  const overdue = new Date(task.due_date) < new Date().setHours(0, 0, 0, 0) && !['done', 'cancelled'].includes(task.status)
   const worked = elapsedSeconds(task)
-  const overExpected = worked > task.expected_minutes * 60
+  const overExpected = isOverExpected(task)
   const progress = Math.min(100, Math.round((worked / (task.expected_minutes * 60)) * 100))
   return (
     <article
-      className={`task-card ${overdue ? 'is-overdue' : ''}`}
+      className={`task-card ${overExpected ? 'is-overdue' : ''}`}
       draggable
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
@@ -86,7 +85,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
       {task.description && <p>{task.description}</p>}
       <div className="task-meta">
         <span><Clock size={14} />{formatMinutes(task.expected_minutes)}</span>
-        <span><CalendarDays size={14} />{task.due_date}</span>
+        <span><CalendarDays size={14} />إسناد {task.due_date}</span>
       </div>
       <div className={`live-timer ${overExpected ? 'is-over' : ''}`}>
         الوقت الفعلي: {formatDuration(worked)} {overExpected ? '• تجاوز المتوقع' : ''}

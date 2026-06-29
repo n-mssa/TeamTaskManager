@@ -14,6 +14,14 @@ export function formatDuration(totalSeconds) {
   return `${hours ? `${hours}س ` : ''}${minutes}د ${rest}ث`
 }
 
+export function isOverExpected(task) {
+  return elapsedSeconds(task) > task.expected_minutes * 60
+}
+
+export function remainingExpectedSeconds(task) {
+  return task.expected_minutes * 60 - elapsedSeconds(task)
+}
+
 export function statusChangePayload(task, nextStatus, user) {
   const payload = { status: nextStatus }
   const taskTitle = task.title ? `\n${task.title}` : ''

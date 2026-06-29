@@ -25,6 +25,7 @@ def scoped_tasks(db: Session, current_user: User, department_id: int | None = No
 
 
 def task_row(task: Task):
+    over_expected = task.is_over_expected
     return {
         "id": task.id,
         "title": task.title,
@@ -33,10 +34,12 @@ def task_row(task: Task):
         "status": task.status.value,
         "priority": task.priority.value,
         "expected_minutes": task.expected_minutes,
+        "assigned_date": task.due_date.isoformat(),
         "due_date": task.due_date.isoformat(),
+        "elapsed_seconds": task.elapsed_seconds,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-        "is_late": bool(task.completed_at and task.completed_at.date() > task.due_date),
-        "is_overdue": bool(task.due_date < date.today() and task.status not in {TaskStatus.done, TaskStatus.cancelled}),
+        "is_late": over_expected,
+        "is_overdue": bool(over_expected and task.status not in {TaskStatus.done, TaskStatus.cancelled}),
         "delay_reason": task.delay_reason.name_ar if task.delay_reason else None,
         "delay_reason_text": task.delay_reason_text,
     }
@@ -49,10 +52,10 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     delayed = [
         task
         for task in all_tasks
-        if task.status == TaskStatus.delayed or (task.due_date < date.today() and task.status not in {TaskStatus.done, TaskStatus.cancelled})
+        if task.status == TaskStatus.delayed or (task.is_over_expected and task.status not in {TaskStatus.done, TaskStatus.cancelled})
     ]
     pending_work = [task for task in all_tasks if task.status in {TaskStatus.pending, TaskStatus.in_progress}]
-    completed_late = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and task.completed_at.date() > task.due_date]
+    completed_late = [task for task in all_tasks if task.status == TaskStatus.done and task.is_over_expected]
     created_week = [task for task in all_tasks if start_date <= task.created_at.date() <= end_date]
 
     by_department = (
@@ -76,7 +79,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     )
     delay_reasons = (
         base.outerjoin(DelayReason)
-        .filter(or_(Task.status == TaskStatus.delayed, Task.due_date < date.today()))
+        .filter(or_(Task.status == TaskStatus.delayed, Task.overrun_reason_text.isnot(None)))
         .with_entities(func.coalesce(DelayReason.name_ar, "سبب غير محدد"), func.count(Task.id))
         .group_by(DelayReason.name_ar)
         .all()

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusLabels } from '../utils/labels'
-import { optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
+import { isOverExpected, optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 import { AlertTriangle, CheckCircle2, Clock3, ListTodo, PlayCircle } from 'lucide-react'
 
 export default function Dashboard({ user, openTask, createTask }) {
@@ -30,7 +30,7 @@ export default function Dashboard({ user, openTask, createTask }) {
     pending: tasks.filter((task) => task.status === 'pending').length,
     inProgress: tasks.filter((task) => task.status === 'in_progress').length,
     done: tasks.filter((task) => task.status === 'done').length,
-    delayed: tasks.filter((task) => task.status === 'delayed' || (new Date(task.due_date) < new Date() && !['done', 'cancelled'].includes(task.status))).length,
+    delayed: tasks.filter((task) => task.status === 'delayed' || (isOverExpected(task) && !['done', 'cancelled'].includes(task.status))).length,
   }), [tasks])
 
   function reconcileTask(updatedTask) {

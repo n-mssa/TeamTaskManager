@@ -80,7 +80,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <div><span>القسم</span><strong>{task.department?.name_ar}</strong></div>
         <div><span>الوقت المتوقع</span><strong>{task.expected_minutes} دقيقة</strong></div>
         <div><span>الوقت الفعلي</span><strong className={elapsedSeconds(task) > task.expected_minutes * 60 ? 'timer-over' : ''}>{formatDuration(elapsedSeconds(task))}</strong></div>
-        <div><span>تاريخ التسليم</span><strong>{task.due_date}</strong></div>
+        <div><span>تاريخ الإسناد</span><strong>{task.due_date}</strong></div>
         <div><span>بدأت في</span><strong>{task.started_at || '-'}</strong></div>
         <div><span>أنجزت في</span><strong>{task.completed_at || '-'}</strong></div>
       </div>

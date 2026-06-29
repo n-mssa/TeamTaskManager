@@ -38,8 +38,8 @@ export default function Reports({ user }) {
 
   function exportCsv() {
     const rows = [...(report?.completed_tasks || []), ...(report?.pending_in_progress_tasks || []), ...(report?.delayed_tasks || [])]
-    const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ التسليم,تاريخ الإنجاز,هل تأخرت']
-      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, row.due_date, row.completed_at || '', row.is_late ? 'نعم' : 'لا'].join(',')))
+    const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع']
+      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, row.assigned_date || row.due_date, row.completed_at || '', row.is_late ? 'نعم' : 'لا'].join(',')))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
@@ -83,8 +83,8 @@ function ReportTable({ title, rows }) {
       <h2>{title}<small>{rows.length} مهمة</small></h2>
       {rows.length
         ? <div className="table-wrap">
-          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>القسم</th><th>الحالة</th><th>تاريخ التسليم</th><th>تاريخ الإنجاز</th><th>هل تأخرت؟</th></tr></thead>
-            <tbody>{rows.map((row) => <tr key={`${title}-${row.id}`}><td>{row.title}</td><td>{row.assignee}</td><td>{row.department}</td><td>{statusLabels[row.status] || row.status}</td><td>{row.due_date}</td><td>{row.completed_at || '-'}</td><td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td></tr>)}</tbody>
+          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>القسم</th><th>الحالة</th><th>تاريخ الإسناد</th><th>تاريخ الإنجاز</th><th>تجاوزت الوقت؟</th></tr></thead>
+            <tbody>{rows.map((row) => <tr key={`${title}-${row.id}`}><td>{row.title}</td><td>{row.assignee}</td><td>{row.department}</td><td>{statusLabels[row.status] || row.status}</td><td>{row.assigned_date || row.due_date}</td><td>{row.completed_at || '-'}</td><td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td></tr>)}</tbody>
           </table>
         </div>
         : <EmptyState compact title="لا توجد مهام في هذا القسم" description="ستظهر المهام هنا عند توفر بيانات ضمن الفترة المحددة." />}

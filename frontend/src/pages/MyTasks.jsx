@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusOptions } from '../utils/labels'
-import { optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
+import { isOverExpected, optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 
 export default function MyTasks({ user, openTask }) {
   const [tasks, setTasks] = useState([])
@@ -21,8 +21,7 @@ export default function MyTasks({ user, openTask }) {
 
   const visible = useMemo(() => {
     if (filter === 'overdue') {
-      const today = new Date().setHours(0, 0, 0, 0)
-      return tasks.filter((task) => new Date(task.due_date) < today && !['done', 'cancelled'].includes(task.status))
+      return tasks.filter((task) => isOverExpected(task) && !['done', 'cancelled'].includes(task.status))
     }
     if (filter === 'all') return tasks
     return tasks.filter((task) => task.status === filter)
@@ -65,7 +64,7 @@ export default function MyTasks({ user, openTask }) {
       <div className="filters compact">
         <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>الكل</button>
         {statusOptions.map(([value, label]) => <button key={value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{label}</button>)}
-        <button className={filter === 'overdue' ? 'active' : ''} onClick={() => setFilter('overdue')}>متأخرة عن موعدها</button>
+        <button className={filter === 'overdue' ? 'active' : ''} onClick={() => setFilter('overdue')}>متأخرة عن الوقت المتوقع</button>
       </div>
       {error && <p className="error">{error}</p>}
       <KanbanBoard tasks={visible} user={user} onOpen={openTask} onMove={updateStatus} onOverrun={saveOverrunReason} />

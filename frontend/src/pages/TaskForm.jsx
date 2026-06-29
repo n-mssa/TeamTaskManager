@@ -14,7 +14,6 @@ const emptyTask = {
   status: 'pending',
   expected_hours: 1,
   expected_minutes_part: 0,
-  due_date: '',
   manager_notes: '',
   hold_reason_text: '',
   overrun_reason_text: '',
@@ -44,7 +43,6 @@ export default function TaskForm({ taskId, onSaved }) {
         ...task,
         expected_hours: Math.floor(task.expected_minutes / 60),
         expected_minutes_part: task.expected_minutes % 60,
-        due_date: task.due_date,
       })
     })
   }, [taskId])
@@ -91,7 +89,6 @@ export default function TaskForm({ taskId, onSaved }) {
       priority: form.priority,
       status: form.status,
       expected_minutes: Number(form.expected_hours || 0) * 60 + Number(form.expected_minutes_part || 0),
-      due_date: form.due_date,
       delay_reason_id: form.delay_reason_id ? Number(form.delay_reason_id) : null,
       delay_reason_text: form.delay_reason_text || null,
       hold_reason_text: form.hold_reason_text || null,
@@ -135,7 +132,6 @@ export default function TaskForm({ taskId, onSaved }) {
         </select></label>
         <label>الأولوية<select value={form.priority} onChange={(e) => setValue('priority', e.target.value)}>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>الحالة<select value={form.status} onChange={(e) => setValue('status', e.target.value)}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>تاريخ التسليم<input required type="date" value={form.due_date} onChange={(e) => setValue('due_date', e.target.value)} /></label>
         <label>ساعات متوقعة<input type="number" min="0" value={form.expected_hours} onChange={(e) => setValue('expected_hours', e.target.value)} /></label>
         <label>دقائق<input type="number" min="0" max="59" value={form.expected_minutes_part} onChange={(e) => setValue('expected_minutes_part', e.target.value)} /></label>
         <label className="span-2">الوصف<textarea value={form.description || ''} onChange={(e) => setValue('description', e.target.value)} /></label>
