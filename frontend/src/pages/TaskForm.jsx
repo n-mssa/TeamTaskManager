@@ -15,7 +15,7 @@ const emptyTask = {
   department_id: '',
   assigned_to_user_id: '',
   priority: 'normal',
-  status: 'in_progress',
+  status: 'pending',
   expected_hours: '01',
   expected_minutes_part: '00',
   manager_notes: '',
@@ -120,7 +120,7 @@ export default function TaskForm({ taskId, onSaved }) {
       overrun_reason_text: form.overrun_reason_text || null,
       manager_notes: form.manager_notes || null,
     }
-    if (!taskId) payload.status = 'in_progress'
+    if (!taskId) payload.status = 'pending'
     try {
       if (!taskId && attachments.length) {
         const formData = new FormData()
