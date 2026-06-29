@@ -13,17 +13,26 @@ const summaryLabels = {
   expected_minutes: 'إجمالي الوقت المتوقع بالدقائق',
 }
 
-export default function Reports() {
+export default function Reports({ user }) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [userId, setUserId] = useState('')
+  const [users, setUsers] = useState([])
   const [report, setReport] = useState(null)
+  const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
 
   async function load() {
     const params = new URLSearchParams()
     if (startDate) params.set('start_date', startDate)
     if (endDate) params.set('end_date', endDate)
+    if (userId) params.set('user_id', userId)
     setReport(await api(`/reports/weekly${params.toString() ? `?${params}` : ''}`))
   }
+
+  useEffect(() => {
+    if (!canFilterUsers) return
+    api('/users?active_only=true').then(setUsers).catch(() => setUsers([]))
+  }, [canFilterUsers])
 
   useEffect(() => { load() }, [])
 
@@ -35,7 +44,8 @@ export default function Reports() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = 'weekly-report.csv'
+    const selectedUser = users.find((item) => String(item.id) === String(userId))
+    link.download = selectedUser ? `weekly-report-${selectedUser.username}.csv` : 'weekly-report.csv'
     link.click()
   }
 
@@ -49,6 +59,12 @@ export default function Reports() {
       <div className="filters">
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        {canFilterUsers && (
+          <select value={userId} onChange={(e) => setUserId(e.target.value)}>
+            <option value="">كل المستخدمين</option>
+            {users.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
+          </select>
+        )}
         <button onClick={load}>تحديث التقرير</button>
       </div>
       <div className="stats">
