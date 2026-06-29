@@ -13,6 +13,10 @@ TASK_COLUMNS = {
     "deletion_reason": "TEXT",
 }
 
+USER_COLUMNS = {
+    "theme_id": "VARCHAR(32) NOT NULL DEFAULT 'light'",
+}
+
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_tasks_assignee_active_due ON tasks (assigned_to_user_id, due_date) WHERE deleted_at IS NULL",
     "CREATE INDEX IF NOT EXISTS ix_tasks_department_active_due ON tasks (department_id, due_date) WHERE deleted_at IS NULL",
@@ -28,6 +32,8 @@ def apply_migrations():
     with engine.begin() as connection:
         for column, definition in TASK_COLUMNS.items():
             connection.execute(text(f"ALTER TABLE tasks ADD COLUMN IF NOT EXISTS {column} {definition}"))
+        for column, definition in USER_COLUMNS.items():
+            connection.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {definition}"))
         connection.execute(
             text(
                 "UPDATE tasks SET timer_started_at = CURRENT_TIMESTAMP "

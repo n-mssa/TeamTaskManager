@@ -234,6 +234,68 @@ small,
   left: 18px;
 }
 
+.theme-picker {
+  position: relative;
+}
+
+.theme-picker .icon-button {
+  background: var(--surface);
+}
+
+.theme-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 10px);
+  left: 0;
+  width: 180px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-hover);
+}
+
+.theme-menu strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.theme-menu div {
+  display: grid;
+  gap: 6px;
+}
+
+.theme-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--text);
+  text-align: right;
+  box-shadow: none;
+}
+
+.theme-menu button:hover,
+.theme-menu button.active {
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  color: var(--text);
+  transform: none;
+}
+
+.theme-menu button span {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.14);
+}
+
 .modal-backdrop {
   position: fixed;
   z-index: 20;
@@ -938,6 +1000,8 @@ th {
   --navy-700: #173653;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
+  --accent-rgb: 37, 99, 235;
+  --focus: #60a5fa;
   --surface: #ffffff;
   --surface-soft: #f8fafc;
   --canvas: #f3f6fa;
@@ -946,6 +1010,54 @@ th {
   --muted: #6b778b;
   --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-hover: 0 12px 28px rgba(15, 23, 42, 0.11), 0 3px 8px rgba(15, 23, 42, 0.05);
+}
+
+:root[data-theme='blue'] {
+  --navy-950: #082f49;
+  --navy-900: #0c4a6e;
+  --navy-800: #075985;
+  --navy-700: #0369a1;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-rgb: 14, 165, 233;
+  --focus: #38bdf8;
+  --canvas: #eff8ff;
+  --surface-soft: #f6fbff;
+  --border: #cfe7f6;
+  --text: #102033;
+  --muted: #557086;
+}
+
+:root[data-theme='green'] {
+  --navy-950: #052e1a;
+  --navy-900: #064e3b;
+  --navy-800: #065f46;
+  --navy-700: #047857;
+  --accent: #16a34a;
+  --accent-hover: #15803d;
+  --accent-rgb: 22, 163, 74;
+  --focus: #4ade80;
+  --canvas: #f0fdf4;
+  --surface-soft: #f7fef9;
+  --border: #ccebd6;
+  --text: #102719;
+  --muted: #587464;
+}
+
+:root[data-theme='orange'] {
+  --navy-950: #431407;
+  --navy-900: #7c2d12;
+  --navy-800: #9a3412;
+  --navy-700: #c2410c;
+  --accent: #f97316;
+  --accent-hover: #ea580c;
+  --accent-rgb: 249, 115, 22;
+  --focus: #fb923c;
+  --canvas: #fff7ed;
+  --surface-soft: #fffbf5;
+  --border: #f3dcc8;
+  --text: #2d1b12;
+  --muted: #7b6658;
 }
 
 body {
@@ -971,7 +1083,7 @@ button:hover {
 .primary {
   background: var(--accent);
   border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.22);
 }
 
 .primary:hover {
@@ -992,8 +1104,8 @@ input:focus,
 select:focus,
 textarea:focus {
   background: var(--surface);
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
 .app-shell {
@@ -1030,7 +1142,7 @@ textarea:focus {
   background: var(--accent);
   color: #ffffff;
   line-height: 1;
-  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 7px 18px rgba(var(--accent-rgb), 0.35);
 }
 
 .brand svg {
@@ -1075,7 +1187,7 @@ textarea:focus {
   background: var(--accent);
   border-color: var(--accent);
   color: #ffffff;
-  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.28);
+  box-shadow: 0 7px 18px rgba(var(--accent-rgb), 0.28);
 }
 
 .sidebar-user {
@@ -1543,6 +1655,8 @@ tbody tr:hover td {
   --border: #29384a;
   --text: #edf2f7;
   --muted: #9ca8b8;
+  --accent-rgb: 63, 120, 173;
+  --focus: #4a86bd;
 }
 
 :root[data-theme='dark'] .topbar {
@@ -1582,6 +1696,17 @@ tbody tr:hover td {
 :root[data-theme='dark'] .tone-green .stat-icon,
 :root[data-theme='dark'] .tone-red .stat-icon {
   background: #223246;
+}
+
+:root[data-theme='dark'] .theme-menu {
+  background: #142131;
+  border-color: #29384a;
+}
+
+:root[data-theme='dark'] .theme-menu button {
+  background: #101b29;
+  border-color: #29384a;
+  color: #edf2f7;
 }
 
 @media (max-width: 780px) {

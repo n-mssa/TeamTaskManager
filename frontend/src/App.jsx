@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, BarChart3, Building2, CalendarDays, ClipboardList, LogOut, Moon, Plus, Sun, Users as UsersIcon, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Building2, CalendarDays, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
@@ -28,6 +28,7 @@ export default function App() {
     api('/auth/me')
       .then((me) => {
         setUser(me)
+        setTheme(me.theme_id || localStorage.getItem('team_tasks_theme') || 'light')
         setRoute(defaultRoute(me.role))
       })
       .catch(() => setRoute('login'))
@@ -76,12 +77,23 @@ export default function App() {
     setRoute('task-details')
   }
 
+  function saveTheme(nextTheme, activeUser = user) {
+    setTheme(nextTheme)
+    if (!activeUser) return
+    api('/users/me/theme', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme_id: nextTheme }),
+    })
+      .then((updatedUser) => setUser(updatedUser))
+      .catch(() => {})
+  }
+
   if (route === 'loading') return <div className="empty">جار التحميل...</div>
   if (route === 'login') {
     return (
       <>
-        <ThemeToggle theme={theme} setTheme={setTheme} className="login-theme-toggle" />
-        <Login onLogin={(me) => { setUser(me); setRoute(defaultRoute(me.role)) }} />
+        <ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme)} className="login-theme-toggle" />
+        <Login onLogin={(me) => { setUser(me); setTheme(me.theme_id || theme); setRoute(defaultRoute(me.role)) }} />
       </>
     )
   }
@@ -119,7 +131,7 @@ export default function App() {
         <header className="topbar">
           <div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div>
           <div className="topbar-actions">
-            <ThemeToggle theme={theme} setTheme={setTheme} />
+            <ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme, user)} />
             <span className="topbar-avatar avatar">{initials(user.full_name_ar)}</span>
           </div>
         </header>
@@ -235,19 +247,53 @@ function daysFromToday(dueDate) {
   return Math.round((due - today) / 86400000)
 }
 
-function ThemeToggle({ theme, setTheme, className = '' }) {
-  const isDark = theme === 'dark'
+function ThemePicker({ theme, onThemeChange, className = '' }) {
+  const [open, setOpen] = useState(false)
+  const activeTheme = themeOptions.find((option) => option.id === theme) || themeOptions[0]
   return (
-    <button
-      className={`icon-button ${className}`}
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      title={isDark ? 'استخدام الوضع النهاري' : 'استخدام الوضع الليلي'}
-      aria-label={isDark ? 'استخدام الوضع النهاري' : 'استخدام الوضع الليلي'}
-    >
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
-    </button>
+    <div className={`theme-picker ${className}`}>
+      <button
+        className="icon-button"
+        onClick={() => setOpen((value) => !value)}
+        title="اختيار الثيم"
+        aria-label="اختيار الثيم"
+        type="button"
+      >
+        <Palette size={18} />
+      </button>
+      {open && (
+        <div className="theme-menu" role="menu">
+          <strong>الثيم</strong>
+          <div>
+            {themeOptions.map((option) => (
+              <button
+                key={option.id}
+                className={activeTheme.id === option.id ? 'active' : ''}
+                onClick={() => {
+                  onThemeChange(option.id)
+                  setOpen(false)
+                }}
+                type="button"
+                title={option.label}
+              >
+                <span style={{ background: option.color }} />
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
+
+const themeOptions = [
+  { id: 'light', label: 'فاتح', color: '#2563eb' },
+  { id: 'dark', label: 'ليلي', color: '#0f172a' },
+  { id: 'blue', label: 'أزرق', color: '#0ea5e9' },
+  { id: 'green', label: 'أخضر', color: '#16a34a' },
+  { id: 'orange', label: 'برتقالي', color: '#f97316' },
+]
 
 function buildNav(role) {
   if (role === 'employee') {

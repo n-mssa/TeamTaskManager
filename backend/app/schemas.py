@@ -45,6 +45,7 @@ class UserBase(BaseModel):
     role: UserRole
     department_id: Optional[int] = None
     is_active: bool = True
+    theme_id: str = "light"
 
 
 class UserCreate(UserBase):
@@ -63,6 +64,10 @@ class UserUpdate(BaseModel):
 
 class PasswordReset(BaseModel):
     password: str = Field(min_length=4)
+
+
+class ThemePreference(BaseModel):
+    theme_id: str = Field(pattern="^(light|dark|blue|green|orange)$")
 
 
 class UserOut(UserBase):

@@ -57,6 +57,7 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.employee)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    theme_id = Column(String(32), nullable=False, default="light")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

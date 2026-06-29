@@ -5,7 +5,7 @@ from ..auth import get_current_user, hash_password
 from ..database import get_db
 from ..models import User
 from ..permissions import require_admin
-from ..schemas import PasswordReset, UserCreate, UserOut, UserUpdate
+from ..schemas import PasswordReset, ThemePreference, UserCreate, UserOut, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -32,6 +32,14 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), current_user
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.patch("/me/theme", response_model=UserOut)
+def update_own_theme(payload: ThemePreference, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    current_user.theme_id = payload.theme_id
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 @router.get("/{user_id}", response_model=UserOut)
