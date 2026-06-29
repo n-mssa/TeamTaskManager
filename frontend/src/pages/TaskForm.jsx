@@ -177,7 +177,7 @@ export default function TaskForm({ taskId, onSaved }) {
               onBlur={() => blurTimePart('expected_minutes_part', 59)}
             />
           </div>
-          <small>ساعات : دقائق</small>
+          <small>دقائق : ساعات</small>
         </label>
         <label className="span-2">الوصف<textarea value={form.description || ''} onChange={(e) => setValue('description', e.target.value)} /></label>
         <label>سبب التأخير<select value={form.delay_reason_id || ''} onChange={(e) => setValue('delay_reason_id', e.target.value)}>
