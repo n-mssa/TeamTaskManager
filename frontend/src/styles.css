@@ -1529,6 +1529,53 @@ tbody tr:hover td {
   padding: 22px;
 }
 
+.expected-time-field {
+  align-content: start;
+}
+
+.expected-time-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.expected-time-control input {
+  width: 78px;
+  height: 58px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: #eef0f3;
+  color: var(--text);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  box-shadow: none;
+}
+
+.expected-time-control input:first-child {
+  background: #eadcff;
+  color: #6d28d9;
+}
+
+.expected-time-control input:focus {
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.14);
+}
+
+.expected-time-control span {
+  color: var(--text);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .file-upload input {
   padding: 9px;
 }
@@ -1707,6 +1754,16 @@ tbody tr:hover td {
   background: #101b29;
   border-color: #29384a;
   color: #edf2f7;
+}
+
+:root[data-theme='dark'] .expected-time-control input {
+  background: #223246;
+  color: #edf2f7;
+}
+
+:root[data-theme='dark'] .expected-time-control input:first-child {
+  background: #34245d;
+  color: #c4b5fd;
 }
 
 @media (max-width: 780px) {

@@ -116,6 +116,7 @@ def read_attachment_file(upload: UploadFile, task_id: int):
 
 
 def create_task_record(payload: TaskCreate, db: Session, current_user: User):
+    payload = payload.model_copy(update={"status": TaskStatus.in_progress})
     assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
     if not assignee or not assignee.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee must be an active user")
@@ -182,7 +183,7 @@ def create_task_with_attachments(
     department_id: int = Form(...),
     assigned_to_user_id: int = Form(...),
     priority: TaskPriority = Form(default=TaskPriority.normal),
-    status_value: TaskStatus = Form(default=TaskStatus.pending, alias="status"),
+    status_value: TaskStatus = Form(default=TaskStatus.in_progress, alias="status"),
     expected_minutes: int = Form(...),
     due_date: Optional[date] = Form(default=None),
     delay_reason_id: Optional[int] = Form(default=None),

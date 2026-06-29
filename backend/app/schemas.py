@@ -104,7 +104,7 @@ class TaskBase(BaseModel):
     department_id: int
     assigned_to_user_id: int
     priority: TaskPriority = TaskPriority.normal
-    status: TaskStatus = TaskStatus.pending
+    status: TaskStatus = TaskStatus.in_progress
     expected_minutes: int = Field(gt=0)
     due_date: date = Field(default_factory=date.today)
     delay_reason_id: Optional[int] = None

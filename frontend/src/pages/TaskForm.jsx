@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { priorityOptions, statusOptions } from '../utils/labels'
+import { priorityOptions } from '../utils/labels'
 
 const maxAttachments = 3
 const maxAttachmentBytes = 10 * 1024 * 1024
+
+function formatTimePart(value) {
+  return String(Number(value || 0)).padStart(2, '0')
+}
 
 const emptyTask = {
   title: '',
@@ -11,9 +15,9 @@ const emptyTask = {
   department_id: '',
   assigned_to_user_id: '',
   priority: 'normal',
-  status: 'pending',
-  expected_hours: 1,
-  expected_minutes_part: 0,
+  status: 'in_progress',
+  expected_hours: '01',
+  expected_minutes_part: '00',
   manager_notes: '',
   hold_reason_text: '',
   overrun_reason_text: '',
@@ -41,14 +45,30 @@ export default function TaskForm({ taskId, onSaved }) {
       setDelayReasons(nextDelayReasons)
       if (task) setForm({
         ...task,
-        expected_hours: Math.floor(task.expected_minutes / 60),
-        expected_minutes_part: task.expected_minutes % 60,
+        expected_hours: formatTimePart(Math.floor(task.expected_minutes / 60)),
+        expected_minutes_part: formatTimePart(task.expected_minutes % 60),
       })
     })
   }, [taskId])
 
   function setValue(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  function setTimePart(key, value, max) {
+    const digits = value.replace(/\D/g, '').slice(0, 2)
+    if (digits === '') {
+      setValue(key, '')
+      return
+    }
+    setValue(key, String(Math.min(max, Number(digits))))
+  }
+
+  function blurTimePart(key, max) {
+    setForm((current) => ({
+      ...current,
+      [key]: formatTimePart(Math.min(max, Number(current[key] || 0))),
+    }))
   }
 
   function chooseAttachments(event) {
@@ -81,20 +101,26 @@ export default function TaskForm({ taskId, onSaved }) {
     if (saving) return
     setSaving(true)
     setError('')
+    const expectedMinutes = Number(form.expected_hours || 0) * 60 + Number(form.expected_minutes_part || 0)
+    if (expectedMinutes <= 0) {
+      setError('الوقت المتوقع يجب أن يكون أكبر من صفر.')
+      setSaving(false)
+      return
+    }
     const payload = {
       title: form.title,
       description: form.description || null,
       department_id: Number(form.department_id),
       assigned_to_user_id: Number(form.assigned_to_user_id),
       priority: form.priority,
-      status: form.status,
-      expected_minutes: Number(form.expected_hours || 0) * 60 + Number(form.expected_minutes_part || 0),
+      expected_minutes: expectedMinutes,
       delay_reason_id: form.delay_reason_id ? Number(form.delay_reason_id) : null,
       delay_reason_text: form.delay_reason_text || null,
       hold_reason_text: form.hold_reason_text || null,
       overrun_reason_text: form.overrun_reason_text || null,
       manager_notes: form.manager_notes || null,
     }
+    if (!taskId) payload.status = 'in_progress'
     try {
       if (!taskId && attachments.length) {
         const formData = new FormData()
@@ -131,9 +157,28 @@ export default function TaskForm({ taskId, onSaved }) {
           <option value="">اختر الموظف</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
         </select></label>
         <label>الأولوية<select value={form.priority} onChange={(e) => setValue('priority', e.target.value)}>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>الحالة<select value={form.status} onChange={(e) => setValue('status', e.target.value)}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>ساعات متوقعة<input type="number" min="0" value={form.expected_hours} onChange={(e) => setValue('expected_hours', e.target.value)} /></label>
-        <label>دقائق<input type="number" min="0" max="59" value={form.expected_minutes_part} onChange={(e) => setValue('expected_minutes_part', e.target.value)} /></label>
+        <label className="expected-time-field">الوقت المتوقع
+          <div className="expected-time-control" dir="ltr">
+            <input
+              aria-label="ساعات"
+              inputMode="numeric"
+              maxLength="2"
+              value={form.expected_hours}
+              onChange={(e) => setTimePart('expected_hours', e.target.value, 99)}
+              onBlur={() => blurTimePart('expected_hours', 99)}
+            />
+            <span>:</span>
+            <input
+              aria-label="دقائق"
+              inputMode="numeric"
+              maxLength="2"
+              value={form.expected_minutes_part}
+              onChange={(e) => setTimePart('expected_minutes_part', e.target.value, 59)}
+              onBlur={() => blurTimePart('expected_minutes_part', 59)}
+            />
+          </div>
+          <small>ساعات : دقائق</small>
+        </label>
         <label className="span-2">الوصف<textarea value={form.description || ''} onChange={(e) => setValue('description', e.target.value)} /></label>
         <label>سبب التأخير<select value={form.delay_reason_id || ''} onChange={(e) => setValue('delay_reason_id', e.target.value)}>
           <option value="">بدون</option>{delayReasons.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
