@@ -299,6 +299,25 @@ small,
   box-shadow: none;
 }
 
+.browser-notification-enable {
+  width: calc(100% - 24px);
+  min-height: 34px;
+  margin: 10px 12px 0;
+  padding: 7px 10px;
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.browser-notification-note {
+  margin: 0;
+  padding: 10px 12px 0;
+  color: #b42318;
+  font-size: 12px;
+}
+
 .notification-list {
   max-height: 340px;
   overflow-y: auto;

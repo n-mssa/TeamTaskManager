@@ -22,6 +22,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [toast, setToast] = useState(null)
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -76,6 +77,7 @@ export default function App() {
             seen.add(fresh.id)
             sessionStorage.setItem(seenKey, JSON.stringify([...seen].slice(-100)))
             setToast(fresh)
+            if (document.hidden) showBrowserNotification(fresh)
             window.setTimeout(() => setToast((current) => current?.id === fresh.id ? null : current), 6000)
           }
         })
@@ -85,7 +87,7 @@ export default function App() {
     loadNotifications()
     const interval = window.setInterval(loadNotifications, 45_000)
     return () => window.clearInterval(interval)
-  }, [user])
+  }, [user, browserNotificationPermission])
 
   function defaultRoute(role) {
     if (role === 'employee') return 'my-tasks'
@@ -139,6 +141,28 @@ export default function App() {
     setToast(null)
   }
 
+  async function enableBrowserNotifications() {
+    if (!('Notification' in window)) {
+      setBrowserNotificationPermission('unsupported')
+      return
+    }
+    const permission = await window.Notification.requestPermission()
+    setBrowserNotificationPermission(permission)
+  }
+
+  function showBrowserNotification(notification) {
+    if (!('Notification' in window) || window.Notification.permission !== 'granted') return
+    const browserNotification = new window.Notification(notification.title, {
+      body: notification.message,
+      tag: `team-task-${notification.id}`,
+    })
+    browserNotification.onclick = () => {
+      window.focus()
+      openNotification(notification)
+      browserNotification.close()
+    }
+  }
+
   if (route === 'loading') return <div className="empty">جار التحميل...</div>
   if (route === 'login') {
     return (
@@ -189,6 +213,8 @@ export default function App() {
               onOpenNotification={openNotification}
               onMarkRead={markNotificationRead}
               onMarkAllRead={markAllNotificationsRead}
+              browserPermission={browserNotificationPermission}
+              onEnableBrowserNotifications={enableBrowserNotifications}
             />
             <ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme, user)} />
             <span className="topbar-avatar avatar">{initials(user.full_name_ar)}</span>
@@ -225,7 +251,16 @@ function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('\u00a0')
 }
 
-function NotificationBell({ notifications, open, onToggle, onOpenNotification, onMarkRead, onMarkAllRead }) {
+function NotificationBell({
+  notifications,
+  open,
+  onToggle,
+  onOpenNotification,
+  onMarkRead,
+  onMarkAllRead,
+  browserPermission,
+  onEnableBrowserNotifications,
+}) {
   return (
     <div className="notification-center">
       <button className="icon-button notification-trigger" onClick={onToggle} title="الإشعارات" aria-label="الإشعارات" type="button">
@@ -238,6 +273,7 @@ function NotificationBell({ notifications, open, onToggle, onOpenNotification, o
             <strong>الإشعارات</strong>
             {notifications.length > 0 && <button type="button" onClick={onMarkAllRead}>تحديد الكل كمقروء</button>}
           </header>
+          <BrowserNotificationPrompt permission={browserPermission} onEnable={onEnableBrowserNotifications} />
           {notifications.length ? (
             <div className="notification-list">
               {notifications.map((notification) => (
@@ -262,6 +298,18 @@ function NotificationBell({ notifications, open, onToggle, onOpenNotification, o
   )
 }
 
+function BrowserNotificationPrompt({ permission, onEnable }) {
+  if (permission === 'granted' || permission === 'unsupported') return null
+  if (permission === 'denied') {
+    return <p className="browser-notification-note">تنبيهات المتصفح محظورة من إعدادات المتصفح.</p>
+  }
+  return (
+    <button className="browser-notification-enable" type="button" onClick={onEnable}>
+      تفعيل تنبيهات المتصفح عند الخروج من التبويب
+    </button>
+  )
+}
+
 function NotificationToast({ notification, onOpen, onClose }) {
   return (
     <div className="notification-toast" role="status">
@@ -278,6 +326,11 @@ function formatNotificationTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function getBrowserNotificationPermission() {
+  if (!('Notification' in window)) return 'unsupported'
+  return window.Notification.permission
 }
 
 function routeTitle(route) {
