@@ -200,6 +200,18 @@ class HistoryOut(BaseModel):
     changed_at: datetime
 
 
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    task_id: Optional[int]
+    title: str
+    message: str
+    notification_type: str
+    read_at: Optional[datetime]
+    created_at: datetime
+
+
 class ReportRequest(BaseModel):
     start_date: date
     end_date: date

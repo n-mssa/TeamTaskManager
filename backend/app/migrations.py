@@ -25,6 +25,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_task_comments_task_created ON task_comments (task_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_task_history_task_changed ON task_status_history (task_id, changed_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_task_attachments_task_created ON task_attachments (task_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_notifications_user_read_created ON notifications (user_id, read_at, created_at DESC)",
 ]
 
 
@@ -51,6 +52,20 @@ def apply_migrations():
                 "stored_filename VARCHAR(255) NOT NULL UNIQUE, "
                 "content_type VARCHAR(255), "
                 "size_bytes INTEGER NOT NULL, "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS notifications ("
+                "id SERIAL PRIMARY KEY, "
+                "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                "task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE, "
+                "title VARCHAR(220) NOT NULL, "
+                "message TEXT NOT NULL, "
+                "notification_type VARCHAR(80) NOT NULL DEFAULT 'task_assigned', "
+                "read_at TIMESTAMP WITH TIME ZONE, "
                 "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"
                 ")"
             )

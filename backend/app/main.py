@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .database import Base, engine
 from .migrations import apply_migrations
-from .routers import auth, delay_reasons, departments, reports, tasks, users
+from .routers import auth, delay_reasons, departments, notifications, reports, tasks, users
 from .services.storage import check_storage, storage_config_status
 
 load_dotenv()
@@ -53,3 +53,4 @@ app.include_router(departments.router)
 app.include_router(tasks.router)
 app.include_router(delay_reasons.router)
 app.include_router(reports.router)
+app.include_router(notifications.router)

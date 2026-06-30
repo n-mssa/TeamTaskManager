@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
+from ..models import Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
 from ..schemas import CommentCreate, CommentOut, HistoryOut, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
@@ -115,6 +115,18 @@ def read_attachment_file(upload: UploadFile, task_id: int):
     return original_filename, stored_filename, size, b"".join(chunks)
 
 
+def notify_task_assigned(db: Session, task: Task, assignee_id: int):
+    db.add(
+        Notification(
+            user_id=assignee_id,
+            task=task,
+            title="مهمة جديدة",
+            message=f"تم إسناد مهمة جديدة: {task.title}",
+            notification_type="task_assigned",
+        )
+    )
+
+
 def create_task_record(payload: TaskCreate, db: Session, current_user: User):
     payload = payload.model_copy(update={"status": TaskStatus.pending})
     assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
@@ -132,6 +144,7 @@ def create_task_record(payload: TaskCreate, db: Session, current_user: User):
     task = Task(**payload.model_dump(), created_by_user_id=current_user.id)
     apply_status_effects(task, None, task.status, current_user, db)
     db.add(task)
+    notify_task_assigned(db, task, payload.assigned_to_user_id)
     return task
 
 
@@ -272,6 +285,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee not found")
     assert_can_manage_task_payload(current_user, next_department, assignee)
     next_status = data.get("status", task.status)
+    previous_assignee_id = task.assigned_to_user_id
     validate_status_reasons(
         task,
         next_status,
@@ -285,6 +299,8 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     for key, value in data.items():
         setattr(task, key, value)
     apply_status_effects(task, old_status, task.status, current_user, db)
+    if task.assigned_to_user_id != previous_assignee_id:
+        notify_task_assigned(db, task, task.assigned_to_user_id)
     db.commit()
     db.refresh(task)
     return task

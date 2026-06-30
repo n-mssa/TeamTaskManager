@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, BarChart3, Building2, Clock, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Bell, Building2, Check, Clock, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
@@ -19,6 +19,9 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('team_tasks_theme') || 'light')
   const [briefing, setBriefing] = useState(null)
+  const [notifications, setNotifications] = useState([])
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [toast, setToast] = useState(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -59,6 +62,31 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [user])
 
+  useEffect(() => {
+    if (!user) return
+    const seenKey = `team_tasks_seen_notifications_${user.id}`
+    const seen = new Set(JSON.parse(sessionStorage.getItem(seenKey) || '[]'))
+
+    const loadNotifications = () => {
+      api('/notifications?unread_only=true&limit=20')
+        .then((items) => {
+          setNotifications(items)
+          const fresh = items.find((item) => !seen.has(item.id))
+          if (fresh) {
+            seen.add(fresh.id)
+            sessionStorage.setItem(seenKey, JSON.stringify([...seen].slice(-100)))
+            setToast(fresh)
+            window.setTimeout(() => setToast((current) => current?.id === fresh.id ? null : current), 6000)
+          }
+        })
+        .catch(() => {})
+    }
+
+    loadNotifications()
+    const interval = window.setInterval(loadNotifications, 45_000)
+    return () => window.clearInterval(interval)
+  }, [user])
+
   function defaultRoute(role) {
     if (role === 'employee') return 'my-tasks'
     if (role === 'manager') return 'dashboard'
@@ -70,6 +98,9 @@ export default function App() {
     setToken(null)
     setUser(null)
     setBriefing(null)
+    setNotifications([])
+    setNotificationsOpen(false)
+    setToast(null)
     setRoute('login')
   }
 
@@ -87,6 +118,25 @@ export default function App() {
     })
       .then((updatedUser) => setUser(updatedUser))
       .catch(() => {})
+  }
+
+  async function markNotificationRead(notification) {
+    await api(`/notifications/${notification.id}/read`, { method: 'PATCH' })
+    setNotifications((current) => current.filter((item) => item.id !== notification.id))
+  }
+
+  async function markAllNotificationsRead() {
+    if (!notifications.length) return
+    await api('/notifications/read-all', { method: 'PATCH' })
+    setNotifications([])
+    setNotificationsOpen(false)
+  }
+
+  async function openNotification(notification) {
+    await markNotificationRead(notification)
+    if (notification.task_id) openTask(notification.task_id)
+    setNotificationsOpen(false)
+    setToast(null)
   }
 
   if (route === 'loading') return <div className="empty">جار التحميل...</div>
@@ -132,6 +182,14 @@ export default function App() {
         <header className="topbar">
           <div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div>
           <div className="topbar-actions">
+            <NotificationBell
+              notifications={notifications}
+              open={notificationsOpen}
+              onToggle={() => setNotificationsOpen((value) => !value)}
+              onOpenNotification={openNotification}
+              onMarkRead={markNotificationRead}
+              onMarkAllRead={markAllNotificationsRead}
+            />
             <ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme, user)} />
             <span className="topbar-avatar avatar">{initials(user.full_name_ar)}</span>
           </div>
@@ -158,12 +216,68 @@ export default function App() {
           }}
         />
       )}
+      {toast && <NotificationToast notification={toast} onOpen={() => openNotification(toast)} onClose={() => setToast(null)} />}
     </div>
   )
 }
 
 function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('\u00a0')
+}
+
+function NotificationBell({ notifications, open, onToggle, onOpenNotification, onMarkRead, onMarkAllRead }) {
+  return (
+    <div className="notification-center">
+      <button className="icon-button notification-trigger" onClick={onToggle} title="الإشعارات" aria-label="الإشعارات" type="button">
+        <Bell size={18} />
+        {notifications.length > 0 && <span className="notification-count">{notifications.length}</span>}
+      </button>
+      {open && (
+        <div className="notification-menu">
+          <header>
+            <strong>الإشعارات</strong>
+            {notifications.length > 0 && <button type="button" onClick={onMarkAllRead}>تحديد الكل كمقروء</button>}
+          </header>
+          {notifications.length ? (
+            <div className="notification-list">
+              {notifications.map((notification) => (
+                <article key={notification.id} className="notification-item">
+                  <button type="button" onClick={() => onOpenNotification(notification)}>
+                    <strong>{notification.title}</strong>
+                    <span>{notification.message}</span>
+                    <small>{formatNotificationTime(notification.created_at)}</small>
+                  </button>
+                  <button className="icon-button" type="button" onClick={() => onMarkRead(notification)} title="تحديد كمقروء" aria-label="تحديد كمقروء">
+                    <Check size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="notification-empty">لا توجد إشعارات جديدة.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NotificationToast({ notification, onOpen, onClose }) {
+  return (
+    <div className="notification-toast" role="status">
+      <button type="button" onClick={onOpen}>
+        <strong>{notification.title}</strong>
+        <span>{notification.message}</span>
+      </button>
+      <button className="icon-button" type="button" onClick={onClose} title="إغلاق" aria-label="إغلاق"><X size={16} /></button>
+    </div>
+  )
+}
+
+function formatNotificationTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 function routeTitle(route) {

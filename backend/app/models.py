@@ -154,6 +154,22 @@ class TaskAttachment(Base):
     uploaded_by = relationship("User")
 
 
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
+    title = Column(String(220), nullable=False)
+    message = Column(Text, nullable=False)
+    notification_type = Column(String(80), nullable=False, default="task_assigned")
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User")
+    task = relationship("Task")
+
+
 class TaskStatusHistory(Base):
     __tablename__ = "task_status_history"
 
