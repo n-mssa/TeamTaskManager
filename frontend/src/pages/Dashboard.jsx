@@ -25,6 +25,11 @@ export default function Dashboard({ user, openTask, createTask }) {
 
   useEffect(() => { load() }, [status, assignedTo])
 
+  useEffect(() => {
+    window.addEventListener('team-tasks-refresh', load)
+    return () => window.removeEventListener('team-tasks-refresh', load)
+  }, [status, assignedTo])
+
   const summary = useMemo(() => ({
     total: tasks.length,
     pending: tasks.filter((task) => task.status === 'pending').length,

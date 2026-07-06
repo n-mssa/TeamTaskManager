@@ -19,6 +19,11 @@ export default function MyTasks({ user, openTask }) {
 
   useEffect(() => { load() }, [])
 
+  useEffect(() => {
+    window.addEventListener('team-tasks-refresh', load)
+    return () => window.removeEventListener('team-tasks-refresh', load)
+  }, [])
+
   const visible = useMemo(() => {
     if (filter === 'overdue') {
       return tasks.filter((task) => isOverExpected(task) && !['done', 'cancelled'].includes(task.status))

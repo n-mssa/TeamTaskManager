@@ -539,6 +539,13 @@ small,
   font-size: 22px;
 }
 
+.end-of-day-copy {
+  margin: 18px 0 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
 .briefing-summary {
   flex-wrap: wrap;
   margin: 18px 0 14px;

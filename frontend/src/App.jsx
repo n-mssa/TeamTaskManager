@@ -23,6 +23,7 @@ export default function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
+  const [endOfDayPrompt, setEndOfDayPrompt] = useState(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -89,6 +90,32 @@ export default function App() {
     return () => window.clearInterval(interval)
   }, [user, browserNotificationPermission])
 
+  useEffect(() => {
+    if (!user) return
+    const todayKey = localDateKey()
+    const storageKey = `team_tasks_end_of_day_prompt_${user.id}_${todayKey}`
+
+    const checkEndOfDay = () => {
+      const now = new Date()
+      const isAfterPromptTime = now.getHours() > 16 || (now.getHours() === 16 && now.getMinutes() >= 55)
+      if (!isAfterPromptTime || localStorage.getItem(storageKey) || endOfDayPrompt) return
+      localStorage.setItem(storageKey, 'checked')
+      api(`/tasks?assigned_to=${user.id}&status=in_progress`)
+        .then((tasks) => {
+          const activeTasks = tasks.filter((task) => task.assigned_to_user_id === user.id && task.status === 'in_progress')
+          if (activeTasks.length) {
+            setEndOfDayPrompt({ tasks: activeTasks })
+            if (document.hidden) showEndOfDayBrowserNotification(activeTasks.length)
+          }
+        })
+        .catch(() => {})
+    }
+
+    checkEndOfDay()
+    const interval = window.setInterval(checkEndOfDay, 60_000)
+    return () => window.clearInterval(interval)
+  }, [user, endOfDayPrompt])
+
   function defaultRoute(role) {
     if (role === 'employee') return 'my-tasks'
     if (role === 'manager') return 'dashboard'
@@ -103,6 +130,7 @@ export default function App() {
     setNotifications([])
     setNotificationsOpen(false)
     setToast(null)
+    setEndOfDayPrompt(null)
     setRoute('login')
   }
 
@@ -161,6 +189,33 @@ export default function App() {
       openNotification(notification)
       browserNotification.close()
     }
+  }
+
+  function showEndOfDayBrowserNotification(taskCount) {
+    if (!('Notification' in window) || window.Notification.permission !== 'granted') return
+    const browserNotification = new window.Notification('اليوم أوشك على الانتهاء', {
+      body: `لديك ${taskCount} مهمة قيد التنفيذ. افتح التطبيق لاختيار نقلها إلى متوقف.`,
+      tag: `team-task-end-of-day-${localDateKey()}`,
+    })
+    browserNotification.onclick = () => {
+      window.focus()
+      browserNotification.close()
+    }
+  }
+
+  async function pauseEndOfDayTasks() {
+    if (!endOfDayPrompt?.tasks?.length) return
+    const reason = 'END OF DAY'
+    await Promise.all(endOfDayPrompt.tasks.map((task) => api(`/tasks/${task.id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: 'blocked',
+        hold_reason_text: reason,
+        overrun_reason_text: task.overrun_reason_text || reason,
+      }),
+    })))
+    window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+    setEndOfDayPrompt(null)
   }
 
   if (route === 'loading') return <div className="empty">جار التحميل...</div>
@@ -243,6 +298,13 @@ export default function App() {
         />
       )}
       {toast && <NotificationToast notification={toast} onOpen={() => openNotification(toast)} onClose={() => setToast(null)} />}
+      {endOfDayPrompt && (
+        <EndOfDayPrompt
+          taskCount={endOfDayPrompt.tasks.length}
+          onConfirm={pauseEndOfDayTasks}
+          onDismiss={() => setEndOfDayPrompt(null)}
+        />
+      )}
     </div>
   )
 }
@@ -298,6 +360,29 @@ function NotificationBell({
   )
 }
 
+function EndOfDayPrompt({ taskCount, onConfirm, onDismiss }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onDismiss}>
+      <section className="briefing-modal end-of-day-modal" role="dialog" aria-modal="true" aria-labelledby="end-of-day-title" onClick={(event) => event.stopPropagation()}>
+        <header className="briefing-head">
+          <div>
+            <p className="eyebrow">4:55 PM</p>
+            <h2 id="end-of-day-title">اليوم أوشك على الانتهاء</h2>
+          </div>
+          <button className="icon-button" onClick={onDismiss} title="إغلاق" aria-label="إغلاق"><X size={18} /></button>
+        </header>
+        <p className="end-of-day-copy">
+          لديك {taskCount} مهمة قيد التنفيذ. هل تريد نقلها كلها إلى قائمة متوقف مع سبب: <strong>END OF DAY</strong>؟
+        </p>
+        <footer className="briefing-actions">
+          <button type="button" onClick={onDismiss}>لا، اتركها كما هي</button>
+          <button className="primary" type="button" onClick={onConfirm}>نعم، انقلها</button>
+        </footer>
+      </section>
+    </div>
+  )
+}
+
 function BrowserNotificationPrompt({ permission, onEnable }) {
   if (permission === 'granted' || permission === 'unsupported') return null
   if (permission === 'denied') {
@@ -331,6 +416,11 @@ function formatNotificationTime(value) {
 function getBrowserNotificationPermission() {
   if (!('Notification' in window)) return 'unsupported'
   return window.Notification.permission
+}
+
+function localDateKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
 function routeTitle(route) {
