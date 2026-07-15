@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { statusLabels } from '../utils/labels'
 import EmptyState from '../components/EmptyState'
@@ -20,6 +20,7 @@ export default function Reports({ user }) {
   const [users, setUsers] = useState([])
   const [report, setReport] = useState(null)
   const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
+  const displayedReport = useMemo(() => filterReportByUser(report, userId), [report, userId])
 
   async function load() {
     const params = new URLSearchParams()
@@ -39,7 +40,7 @@ export default function Reports({ user }) {
   useEffect(() => { load() }, [startDate, endDate, userId])
 
   function exportCsv() {
-    const rows = [...(report?.completed_tasks || []), ...(report?.pending_in_progress_tasks || []), ...(report?.delayed_tasks || [])]
+    const rows = [...(displayedReport?.completed_tasks || []), ...(displayedReport?.pending_in_progress_tasks || []), ...(displayedReport?.delayed_tasks || [])]
     const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع']
       .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, row.assigned_date || row.due_date, row.completed_at || '', row.is_late ? 'نعم' : 'لا'].join(',')))
       .join('\n')
@@ -51,7 +52,7 @@ export default function Reports({ user }) {
     link.click()
   }
 
-  if (!report) return <div className="empty">جار التحميل...</div>
+  if (!displayedReport) return <div className="empty">جار التحميل...</div>
   return (
     <section>
       <div className="page-head">
@@ -70,13 +71,43 @@ export default function Reports({ user }) {
         <button onClick={load}>تحديث التقرير</button>
       </div>
       <div className="stats">
-        {Object.entries(report.summary).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{summaryLabels[key] || key}</span></div>)}
+        {Object.entries(displayedReport.summary).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{summaryLabels[key] || key}</span></div>)}
       </div>
-      <ReportTable title="المهام المنجزة" rows={report.completed_tasks} />
-      <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={report.pending_in_progress_tasks} />
-      <ReportTable title="المهام المتأخرة" rows={report.delayed_tasks} />
+      <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} />
+      <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} />
+      <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} />
     </section>
   )
+}
+
+function filterReportByUser(report, userId) {
+  if (!report || !userId) return report
+  const selectedId = Number(userId)
+  const selectedUser = report.available_users?.find((item) => Number(item.id) === selectedId)
+  const belongsToSelected = (row) => {
+    if (row.assignee_id) return Number(row.assignee_id) === selectedId
+    return selectedUser ? row.assignee === selectedUser.full_name_ar : true
+  }
+  const completedTasks = (report.completed_tasks || []).filter(belongsToSelected)
+  const pendingInProgressTasks = (report.pending_in_progress_tasks || []).filter(belongsToSelected)
+  const delayedTasks = (report.delayed_tasks || []).filter(belongsToSelected)
+  const visibleRows = [...completedTasks, ...pendingInProgressTasks, ...delayedTasks]
+
+  return {
+    ...report,
+    completed_tasks: completedTasks,
+    pending_in_progress_tasks: pendingInProgressTasks,
+    delayed_tasks: delayedTasks,
+    summary: {
+      ...report.summary,
+      completed_this_week: completedTasks.length,
+      pending: visibleRows.filter((row) => row.status === 'pending').length,
+      in_progress: visibleRows.filter((row) => row.status === 'in_progress').length,
+      delayed: delayedTasks.length,
+      completed_late: completedTasks.filter((row) => row.is_late || row.is_overdue).length,
+      expected_minutes: visibleRows.reduce((total, row) => total + (Number(row.expected_minutes) || 0), 0),
+    },
+  }
 }
 
 function ReportTable({ title, rows }) {

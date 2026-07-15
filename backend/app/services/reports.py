@@ -6,21 +6,32 @@ from sqlalchemy.orm import Session, joinedload
 from ..models import Department, DelayReason, Task, TaskStatus, User, UserRole
 
 
+def role_value(user: User):
+    return getattr(user.role, "value", user.role)
+
+
+def allowed_report_users_query(db: Session, current_user: User):
+    query = db.query(User)
+    current_role = role_value(current_user)
+    if current_role == UserRole.employee.value:
+        query = query.filter(User.id == current_user.id)
+    elif current_role == UserRole.manager.value:
+        query = query.filter(User.department_id == current_user.department_id)
+    return query
+
+
 def scoped_tasks(db: Session, current_user: User, department_id: int | None = None, user_id: int | None = None):
     query = db.query(Task).filter(Task.deleted_at.is_(None))
-    if current_user.role == UserRole.employee:
+    current_role = role_value(current_user)
+    if current_role == UserRole.employee.value:
         query = query.filter(Task.assigned_to_user_id == current_user.id)
-    elif current_user.role == UserRole.manager:
+    elif current_role == UserRole.manager.value:
         query = query.filter(Task.department_id == current_user.department_id)
     elif department_id:
         query = query.filter(Task.department_id == department_id)
     if user_id:
-        if current_user.role == UserRole.employee and user_id != current_user.id:
-            query = query.filter(False)
-        elif current_user.role == UserRole.manager:
-            query = query.join(User, Task.assigned_to_user_id == User.id).filter(User.department_id == current_user.department_id, User.id == user_id)
-        else:
-            query = query.filter(Task.assigned_to_user_id == user_id)
+        allowed_user = allowed_report_users_query(db, current_user).filter(User.id == user_id).first()
+        query = query.filter(Task.assigned_to_user_id == allowed_user.id) if allowed_user else query.filter(False)
     return query
 
 
@@ -29,6 +40,7 @@ def task_row(task: Task):
     return {
         "id": task.id,
         "title": task.title,
+        "assignee_id": task.assigned_to_user_id,
         "assignee": task.assignee.full_name_ar if task.assignee else "",
         "department": task.department.name_ar if task.department else "",
         "status": task.status.value,
@@ -48,12 +60,7 @@ def task_row(task: Task):
 def weekly_report(db: Session, current_user: User, start_date: date, end_date: date, department_id: int | None = None, user_id: int | None = None):
     base = scoped_tasks(db, current_user, department_id, user_id)
     all_tasks = base.options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason)).all()
-    available_users_query = db.query(User)
-    if current_user.role == UserRole.employee:
-        available_users_query = available_users_query.filter(User.id == current_user.id)
-    elif current_user.role == UserRole.manager:
-        available_users_query = available_users_query.filter(User.department_id == current_user.department_id)
-    available_users = available_users_query.filter(User.is_active.is_(True)).order_by(User.full_name_ar).all()
+    available_users = allowed_report_users_query(db, current_user).filter(User.is_active.is_(True)).order_by(User.full_name_ar).all()
     completed = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and start_date <= task.completed_at.date() <= end_date]
     delayed = [
         task
@@ -94,6 +101,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
+        "selected_user_id": user_id,
         "summary": {
             "created_this_week": len(created_week),
             "completed_this_week": len(completed),
