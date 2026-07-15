@@ -26,7 +26,9 @@ export default function Reports({ user }) {
     if (startDate) params.set('start_date', startDate)
     if (endDate) params.set('end_date', endDate)
     if (userId) params.set('user_id', userId)
-    setReport(await api(`/reports/weekly${params.toString() ? `?${params}` : ''}`))
+    const nextReport = await api(`/reports/weekly${params.toString() ? `?${params}` : ''}`)
+    setReport(nextReport)
+    if (Array.isArray(nextReport.available_users)) setUsers(nextReport.available_users)
   }
 
   useEffect(() => {

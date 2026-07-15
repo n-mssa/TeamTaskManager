@@ -48,6 +48,12 @@ def task_row(task: Task):
 def weekly_report(db: Session, current_user: User, start_date: date, end_date: date, department_id: int | None = None, user_id: int | None = None):
     base = scoped_tasks(db, current_user, department_id, user_id)
     all_tasks = base.options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason)).all()
+    available_users_query = db.query(User)
+    if current_user.role == UserRole.employee:
+        available_users_query = available_users_query.filter(User.id == current_user.id)
+    elif current_user.role == UserRole.manager:
+        available_users_query = available_users_query.filter(User.department_id == current_user.department_id)
+    available_users = available_users_query.filter(User.is_active.is_(True)).order_by(User.full_name_ar).all()
     completed = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and start_date <= task.completed_at.date() <= end_date]
     delayed = [
         task
@@ -113,4 +119,8 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
             for row in by_employee
         ],
         "delay_reasons": [{"reason": name, "count": count} for name, count in delay_reasons],
+        "available_users": [
+            {"id": user.id, "username": user.username, "full_name_ar": user.full_name_ar, "department_id": user.department_id}
+            for user in available_users
+        ],
     }
