@@ -36,7 +36,7 @@ export default function Reports({ user }) {
     api('/users?active_only=true').then(setUsers).catch(() => setUsers([]))
   }, [canFilterUsers])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [startDate, endDate, userId])
 
   function exportCsv() {
     const rows = [...(report?.completed_tasks || []), ...(report?.pending_in_progress_tasks || []), ...(report?.delayed_tasks || [])]
