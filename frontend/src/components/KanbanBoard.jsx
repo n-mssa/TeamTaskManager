@@ -117,14 +117,15 @@ function needsOverrunReason(task, nextStatus, user) {
 }
 
 function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
-  const [selectedReason, setSelectedReason] = useState(reasons[0]?.name_ar || '')
+  const visibleReasons = reasons.filter((item) => !isOtherReasonLabel(item.name_ar) && !isOtherReasonLabel(item.name_en))
+  const [selectedReason, setSelectedReason] = useState(visibleReasons[0]?.name_ar || '__other')
   const [customReason, setCustomReason] = useState('')
   const [error, setError] = useState('')
   const isOther = selectedReason === '__other'
 
   useEffect(() => {
-    if (!selectedReason && reasons[0]?.name_ar) setSelectedReason(reasons[0].name_ar)
-  }, [reasons, selectedReason])
+    if (!selectedReason && visibleReasons[0]?.name_ar) setSelectedReason(visibleReasons[0].name_ar)
+  }, [selectedReason, visibleReasons])
 
   function submit(event) {
     event.preventDefault()
@@ -148,7 +149,7 @@ function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
         <p className="note">المهمة: <strong>{task.title}</strong></p>
         <label>السبب
           <select value={selectedReason} onChange={(event) => { setSelectedReason(event.target.value); setError('') }}>
-            {reasons.map((item) => <option key={item.id} value={item.name_ar}>{item.name_ar}</option>)}
+            {visibleReasons.map((item) => <option key={item.id} value={item.name_ar}>{item.name_ar}</option>)}
             <option value="__other">أخرى</option>
           </select>
         </label>
@@ -165,6 +166,11 @@ function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
       </form>
     </div>
   )
+}
+
+function isOtherReasonLabel(label) {
+  const normalized = String(label || '').trim().toLowerCase()
+  return ['other', 'others', 'سبب آخر', 'اخرى', 'أخرى'].includes(normalized)
 }
 
 function TaskCard({ task, onOpen, onDragStart }) {
