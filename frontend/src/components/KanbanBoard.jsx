@@ -213,6 +213,7 @@ function isOtherReasonLabel(label) {
 }
 
 function CompletionComplaintModal({ task, onCancel, onFinish }) {
+  const [showComplaint, setShowComplaint] = useState(false)
   const [complaintText, setComplaintText] = useState('')
 
   return (
@@ -225,14 +226,29 @@ function CompletionComplaintModal({ task, onCancel, onFinish }) {
           </div>
         </header>
         <p className="note">المهمة: <strong>{task.title}</strong></p>
-        <label>اعتراض اختياري على الوقت المتوقع
-          <textarea value={complaintText} onChange={(event) => setComplaintText(event.target.value)} placeholder="مثال: الوقت المتوقع كان أقل من المطلوب بسبب كثرة التعديلات." />
-        </label>
-        <div className="briefing-actions">
-          <button type="button" onClick={onCancel}>إلغاء</button>
-          <button type="button" onClick={() => onFinish('')}>إنهاء بدون اعتراض</button>
-          <button className="primary" type="submit">إنهاء وإرسال الاعتراض</button>
-        </div>
+        {!showComplaint ? (
+          <div className="completion-choice-grid">
+            <button type="button" className="completion-choice is-good" onClick={() => onFinish('')} aria-label="الوقت مناسب">
+              <img src="/assets/time-ok.png" alt="" />
+              <strong>الوقت مناسب</strong>
+            </button>
+            <button type="button" className="completion-choice is-bad" onClick={() => setShowComplaint(true)} aria-label="الوقت غير مناسب">
+              <img src="/assets/time-complaint.png" alt="" />
+              <strong>الوقت غير مناسب</strong>
+            </button>
+          </div>
+        ) : (
+          <>
+            <label>اشرح سبب الاعتراض على الوقت المتوقع
+              <textarea value={complaintText} onChange={(event) => setComplaintText(event.target.value)} placeholder="مثال: الوقت المتوقع كان أقل من المطلوب بسبب كثرة التعديلات." autoFocus />
+            </label>
+            <div className="briefing-actions">
+              <button type="button" onClick={() => setShowComplaint(false)}>رجوع</button>
+              <button className="primary" type="submit">إنهاء وإرسال الاعتراض</button>
+            </div>
+          </>
+        )}
+        {!showComplaint && <div className="briefing-actions"><button type="button" onClick={onCancel}>إلغاء</button></div>}
       </form>
     </div>
   )
