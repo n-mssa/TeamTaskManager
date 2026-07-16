@@ -656,6 +656,95 @@ small,
   font-size: 13px;
 }
 
+.report-charts {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) repeat(2, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.chart-card {
+  min-height: 260px;
+}
+
+.pie-chart-wrap {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.pie-chart {
+  width: 150px;
+  height: 150px;
+  transform: rotate(-90deg);
+}
+
+.pie-hole {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 8;
+}
+
+.chart-legend {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.bar-chart {
+  display: grid;
+  gap: 11px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(120px, 2fr) 38px;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.bar-row span {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-row div {
+  height: 12px;
+  overflow: hidden;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.bar-row i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #7db7eb);
+  border-radius: inherit;
+}
+
+.bar-row strong {
+  color: var(--text);
+  text-align: left;
+}
+
 .filters,
 .actions,
 .inline-form {
@@ -1075,6 +1164,10 @@ th {
 }
 
 @media (max-width: 980px) {
+  .report-charts {
+    grid-template-columns: 1fr;
+  }
+
   .kanban-board {
     grid-template-columns: repeat(4, 300px);
   }
