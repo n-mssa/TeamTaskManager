@@ -380,8 +380,10 @@ function TaskCard({ task, onOpen, onDragStart }) {
     >
       <div className="task-card-top">
         <span className={`priority priority-${task.priority}`}>{priorityLabels[task.priority]}</span>
-        {task.status === 'done' && <ProductionFlag flagged={task.production_issue_flagged} />}
-        <GripVertical size={16} aria-hidden="true" />
+        <span className="task-card-corner">
+          <GripVertical size={16} aria-hidden="true" />
+          {task.status === 'done' && <ProductionFlag flagged={task.production_issue_flagged} />}
+        </span>
       </div>
       <h3>{task.title}</h3>
       {task.description && <p>{task.description}</p>}

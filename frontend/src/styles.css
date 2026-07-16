@@ -1001,11 +1001,19 @@ small,
   margin-bottom: 8px;
 }
 
+.task-card-corner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 34px;
+  justify-content: flex-end;
+}
+
 .production-flag {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   object-fit: contain;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .production-flag.is-flagged {
