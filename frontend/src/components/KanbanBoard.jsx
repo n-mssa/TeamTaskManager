@@ -267,6 +267,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
     >
       <div className="task-card-top">
         <span className={`priority priority-${task.priority}`}>{priorityLabels[task.priority]}</span>
+        {task.status === 'done' && <ProductionFlag flagged={task.production_issue_flagged} />}
         <GripVertical size={16} aria-hidden="true" />
       </div>
       <h3>{task.title}</h3>
@@ -288,6 +289,17 @@ function TaskCard({ task, onOpen, onDragStart }) {
       {task.delay_reason && <small className="delay-note">{task.delay_reason.name_ar}</small>}
       {task.hold_reason_text && task.status === 'blocked' && <small className="delay-note">سبب الانتظار: {task.hold_reason_text}</small>}
     </article>
+  )
+}
+
+function ProductionFlag({ flagged }) {
+  return (
+    <img
+      className={`production-flag ${flagged ? 'is-flagged' : ''}`}
+      src={flagged ? '/assets/flag-red.png' : '/assets/flag-grey.png'}
+      alt={flagged ? 'مشكلة إنتاج مسجلة' : 'لا توجد مشكلة إنتاج'}
+      title={flagged ? 'مشكلة إنتاج مسجلة' : 'لا توجد مشكلة إنتاج'}
+    />
   )
 }
 

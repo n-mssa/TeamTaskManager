@@ -12,7 +12,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
-from ..schemas import CommentCreate, CommentOut, DelayReviewUpdate, HistoryOut, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import CommentCreate, CommentOut, DelayReviewUpdate, HistoryOut, ProductionIssueUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -379,6 +379,25 @@ def review_delay_reason(task_id: int, payload: DelayReviewUpdate, db: Session = 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
     task.overrun_reason_category = payload.overrun_reason_category
     task.overrun_reason_approved = payload.overrun_reason_approved
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/{task_id}/production-issue", response_model=TaskOut)
+def update_production_issue(task_id: int, payload: ProductionIssueUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    if current_user.role not in {UserRole.admin, UserRole.manager}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
+    if task.status != TaskStatus.done:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Production issues can be flagged only after task is done")
+    reason = (payload.reason or "").strip()
+    if payload.flagged and not reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Production issue reason is required")
+    task.production_issue_flagged = payload.flagged
+    task.production_issue_reason = reason if payload.flagged else None
+    task.production_issue_flagged_by_user_id = current_user.id if payload.flagged else None
+    task.production_issue_flagged_at = datetime.now(timezone.utc) if payload.flagged else None
     db.commit()
     db.refresh(task)
     return task

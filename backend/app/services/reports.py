@@ -74,6 +74,9 @@ def task_row(task: Task):
         "overrun_reason_approved": task.overrun_reason_approved,
         "expected_time_complaint_text": task.expected_time_complaint_text,
         "expected_time_complaint_at": task.expected_time_complaint_at.isoformat() if task.expected_time_complaint_at else None,
+        "production_issue_flagged": task.production_issue_flagged,
+        "production_issue_reason": task.production_issue_reason,
+        "production_issue_flagged_at": task.production_issue_flagged_at.isoformat() if task.production_issue_flagged_at else None,
     }
 
 

@@ -21,6 +21,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [history, setHistory] = useState([])
   const [comment, setComment] = useState('')
   const [delayCategory, setDelayCategory] = useState('on_employee')
+  const [productionIssueReason, setProductionIssueReason] = useState('')
   const [, setTick] = useState(0)
 
   async function load() {
@@ -31,6 +32,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     ])
     setTask(nextTask)
     setDelayCategory(nextTask.overrun_reason_category || 'on_employee')
+    setProductionIssueReason(nextTask.production_issue_reason || '')
     setComments(nextComments)
     setHistory(nextHistory)
   }
@@ -79,8 +81,18 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     setTask(updatedTask)
   }
 
+  async function saveProductionIssue(flagged) {
+    const updatedTask = await api(`/tasks/${task.id}/production-issue`, {
+      method: 'PATCH',
+      body: JSON.stringify({ flagged, reason: flagged ? productionIssueReason : null }),
+    })
+    setTask(updatedTask)
+    setProductionIssueReason(updatedTask.production_issue_reason || '')
+  }
+
   if (!task) return <div className="empty">جار التحميل...</div>
   const canReviewDelay = user.role === 'admin' || user.role === 'manager'
+  const canFlagProductionIssue = canReviewDelay && task.status === 'done'
   return (
     <section>
       <div className="page-head">
@@ -119,6 +131,23 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       </article>
       <article className="panel"><h2>سبب التأخير</h2><p>{task.delay_reason?.name_ar || task.delay_reason_text || 'لا يوجد.'}</p></article>
       <article className="panel"><h2>سبب الانتظار</h2><p>{task.hold_reason_text || 'لا يوجد.'}</p></article>
+      {task.status === 'done' && (
+        <article className="panel production-issue-panel">
+          <h2>مشكلة إنتاج</h2>
+          <div className="production-issue-status">
+            <img src={task.production_issue_flagged ? '/assets/flag-red.png' : '/assets/flag-grey.png'} alt="" />
+            <span>{task.production_issue_flagged ? 'تم تسجيل مشكلة إنتاج' : 'لا توجد مشكلة إنتاج مسجلة'}</span>
+          </div>
+          {task.production_issue_reason && <p>{task.production_issue_reason}</p>}
+          {canFlagProductionIssue && (
+            <div className="inline-form production-issue-form">
+              <input value={productionIssueReason} onChange={(event) => setProductionIssueReason(event.target.value)} placeholder="سبب المشكلة: بليتات ناقصة، ملف ناقص، تأخير إنتاج..." />
+              <button type="button" onClick={() => saveProductionIssue(true)}>رفع العلم</button>
+              {task.production_issue_flagged && <button type="button" onClick={() => saveProductionIssue(false)}>إزالة العلم</button>}
+            </div>
+          )}
+        </article>
+      )}
       <article className="panel">
         <h2>سبب تجاوز الوقت المتوقع</h2>
         <p>{task.overrun_reason_text || 'لا يوجد.'}</p>
