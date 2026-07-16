@@ -24,18 +24,13 @@ export function remainingExpectedSeconds(task) {
 
 export function statusChangePayload(task, nextStatus, user, extra = {}) {
   const payload = { status: nextStatus, ...extra }
-  const taskTitle = task.title ? `\n${task.title}` : ''
 
-  if (nextStatus === 'blocked') {
-    const reason = window.prompt(`سبب وضع المهمة قيد الانتظار:${taskTitle}`)
-    if (!reason?.trim()) return null
-    payload.hold_reason_text = reason.trim()
+  if (nextStatus === 'blocked' && !payload.hold_reason_text?.trim()) {
+    return null
   }
 
-  if (nextStatus === 'delayed') {
-    const reason = window.prompt(`سبب تأخير المهمة:${taskTitle}`)
-    if (!reason?.trim()) return null
-    payload.delay_reason_text = reason.trim()
+  if (nextStatus === 'delayed' && !payload.delay_reason_text?.trim()) {
+    return null
   }
 
   const exceededExpected = elapsedSeconds(task) > task.expected_minutes * 60

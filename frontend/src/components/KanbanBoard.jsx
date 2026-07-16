@@ -10,6 +10,7 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
   const [delayReasons, setDelayReasons] = useState([])
   const [overrunRequest, setOverrunRequest] = useState(null)
   const [finishRequest, setFinishRequest] = useState(null)
+  const [holdRequest, setHoldRequest] = useState(null)
   const promptedOverruns = useRef(new Set())
 
   useEffect(() => {
@@ -44,6 +45,13 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
           onSubmit={submitOverrunReason}
         />
       )}
+      {holdRequest && (
+        <HoldReasonModal
+          task={holdRequest}
+          onCancel={() => setHoldRequest(null)}
+          onSubmit={submitHoldReason}
+        />
+      )}
     </>
   )
 
@@ -65,6 +73,10 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
       setFinishRequest(task)
       return
     }
+    if (needsHoldReason(task, status)) {
+      setHoldRequest(task)
+      return
+    }
     onMove(task, status)
   }
 
@@ -78,7 +90,18 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
       setFinishRequest(taskWithReason)
       return
     }
+    if (nextStatus === 'blocked' && needsHoldReason(taskWithReason, nextStatus)) {
+      setHoldRequest(taskWithReason)
+      return
+    }
     if (nextStatus) onMove(taskWithReason, nextStatus)
+  }
+
+  function submitHoldReason(reason) {
+    if (!holdRequest) return
+    const task = holdRequest
+    setHoldRequest(null)
+    onMove(task, 'blocked', { hold_reason_text: reason.text })
   }
 
   function finishTask(complaintText = '') {
@@ -129,6 +152,13 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
           onFinish={finishTask}
         />
       )}
+      {holdRequest && (
+        <HoldReasonModal
+          task={holdRequest}
+          onCancel={() => setHoldRequest(null)}
+          onSubmit={submitHoldReason}
+        />
+      )}
     </>
   )
 }
@@ -145,6 +175,89 @@ function needsCompletionComplaint(task, nextStatus, user) {
   return nextStatus === 'done'
     && task.status !== 'done'
     && user?.id === task.assigned_to_user_id
+}
+
+function needsHoldReason(task, nextStatus) {
+  return nextStatus === 'blocked' && task.status !== 'blocked'
+}
+
+const holdReasonGroups = [
+  {
+    label: 'أسباب خارجية',
+    options: [
+      'بانتظار معلومات من العميل',
+      'بانتظار موافقة العميل',
+      'بانتظار ملفات أو مرفقات من العميل',
+      'تعديل مطلوب من العميل',
+      'تأخير من المورد',
+      'بانتظار عينة أو مقاس من العميل',
+    ],
+  },
+  {
+    label: 'أسباب داخلية',
+    options: [
+      'نهاية اليوم',
+      'استراحة',
+      'تم استلام مهمة أكثر أولوية',
+      'بانتظار اعتماد المدير',
+      'بانتظار ملفات من المدير',
+      'بانتظار مراجعة داخلية',
+      'إعادة جدولة حسب توجيه الإدارة',
+      'مشكلة في النظام',
+      'اجتماع أو تدريب',
+    ],
+  },
+]
+
+function HoldReasonModal({ task, onCancel, onSubmit }) {
+  const [selectedReason, setSelectedReason] = useState(holdReasonGroups[0].options[0])
+  const [customReason, setCustomReason] = useState('')
+  const [error, setError] = useState('')
+  const isOther = selectedReason === '__other'
+
+  function submit(event) {
+    event.preventDefault()
+    const reason = isOther ? customReason.trim() : selectedReason.trim()
+    if (!reason) {
+      setError('يرجى اختيار سبب أو كتابة سبب آخر.')
+      return
+    }
+    onSubmit({ text: reason })
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onCancel}>
+      <form className="briefing-modal reason-modal" role="dialog" aria-modal="true" onSubmit={submit} onClick={(event) => event.stopPropagation()}>
+        <header className="briefing-head">
+          <div>
+            <p className="eyebrow">إيقاف المهمة مؤقتاً</p>
+            <h2>اختيار سبب التوقف</h2>
+          </div>
+        </header>
+        <p className="note">المهمة: <strong>{task.title}</strong></p>
+        <label>السبب
+          <select value={selectedReason} onChange={(event) => { setSelectedReason(event.target.value); setError('') }}>
+            {holdReasonGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+              </optgroup>
+            ))}
+            <option value="__other">أخرى</option>
+          </select>
+        </label>
+        {isOther && (
+          <label>سبب آخر
+            <textarea value={customReason} onChange={(event) => { setCustomReason(event.target.value); setError('') }} autoFocus />
+          </label>
+        )}
+        {error && <p className="error">{error}</p>}
+        <div className="briefing-actions">
+          <button type="button" onClick={onCancel}>إلغاء</button>
+          <button className="primary" type="submit">نقل إلى متوقف</button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
