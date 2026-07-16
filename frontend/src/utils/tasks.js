@@ -41,9 +41,7 @@ export function statusChangePayload(task, nextStatus, user) {
   const exceededExpected = elapsedSeconds(task) > task.expected_minutes * 60
   const isAssignee = user?.id === task.assigned_to_user_id
   if (isAssignee && task.status === 'in_progress' && nextStatus !== 'in_progress' && exceededExpected && !task.overrun_reason_text) {
-    const reason = window.prompt(`تجاوزت المهمة الوقت المتوقع. يرجى كتابة سبب التجاوز:${taskTitle}`)
-    if (!reason?.trim()) return null
-    payload.overrun_reason_text = reason.trim()
+    return null
   }
 
   return payload

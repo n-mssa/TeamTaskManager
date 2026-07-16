@@ -128,7 +128,15 @@ def notify_task_assigned(db: Session, task: Task, assignee_id: int):
 
 
 def create_task_record(payload: TaskCreate, db: Session, current_user: User):
-    payload = payload.model_copy(update={"status": TaskStatus.pending})
+    payload = payload.model_copy(
+        update={
+            "status": TaskStatus.pending,
+            "delay_reason_id": None,
+            "delay_reason_text": None,
+            "hold_reason_text": None,
+            "overrun_reason_text": None,
+        }
+    )
     assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
     if not assignee or not assignee.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee must be an active user")

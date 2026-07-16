@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import { priorityOptions } from '../utils/labels'
 
@@ -23,7 +23,7 @@ const emptyTask = {
   overrun_reason_text: '',
 }
 
-export default function TaskForm({ taskId, onSaved }) {
+export default function TaskForm({ taskId, onSaved, user }) {
   const [form, setForm] = useState(emptyTask)
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
@@ -31,6 +31,10 @@ export default function TaskForm({ taskId, onSaved }) {
   const [attachments, setAttachments] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const filteredUsers = useMemo(() => {
+    if (!form.department_id) return []
+    return users.filter((item) => String(item.department_id || '') === String(form.department_id))
+  }, [form.department_id, users])
 
   useEffect(() => {
     const requests = [
@@ -50,6 +54,17 @@ export default function TaskForm({ taskId, onSaved }) {
       })
     })
   }, [taskId])
+
+  useEffect(() => {
+    if (taskId || form.department_id || departments.length !== 1) return
+    setValue('department_id', String(departments[0].id))
+  }, [departments, form.department_id, taskId])
+
+  useEffect(() => {
+    if (!form.assigned_to_user_id) return
+    const assigneeStillAvailable = filteredUsers.some((item) => String(item.id) === String(form.assigned_to_user_id))
+    if (!assigneeStillAvailable) setValue('assigned_to_user_id', '')
+  }, [filteredUsers, form.assigned_to_user_id])
 
   function setValue(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -114,10 +129,10 @@ export default function TaskForm({ taskId, onSaved }) {
       assigned_to_user_id: Number(form.assigned_to_user_id),
       priority: form.priority,
       expected_minutes: expectedMinutes,
-      delay_reason_id: form.delay_reason_id ? Number(form.delay_reason_id) : null,
-      delay_reason_text: form.delay_reason_text || null,
+      delay_reason_id: taskId && form.delay_reason_id ? Number(form.delay_reason_id) : null,
+      delay_reason_text: taskId ? form.delay_reason_text || null : null,
       hold_reason_text: form.hold_reason_text || null,
-      overrun_reason_text: form.overrun_reason_text || null,
+      overrun_reason_text: taskId ? form.overrun_reason_text || null : null,
       manager_notes: form.manager_notes || null,
     }
     if (!taskId) payload.status = 'pending'
@@ -153,8 +168,8 @@ export default function TaskForm({ taskId, onSaved }) {
         <label>القسم<select required value={form.department_id} onChange={(e) => setValue('department_id', e.target.value)}>
           <option value="">اختر القسم</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
         </select></label>
-        <label>المكلف<select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)}>
-          <option value="">اختر الموظف</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
+        <label>المكلف<select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id}>
+          <option value="">{form.department_id ? 'اختر الموظف' : 'اختر القسم أولاً'}</option>{filteredUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
         </select></label>
         <label>الأولوية<select value={form.priority} onChange={(e) => setValue('priority', e.target.value)}>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="expected-time-field">الوقت المتوقع
@@ -180,12 +195,14 @@ export default function TaskForm({ taskId, onSaved }) {
           <small>دقائق : ساعات</small>
         </label>
         <label className="span-2">الوصف<textarea value={form.description || ''} onChange={(e) => setValue('description', e.target.value)} /></label>
-        <label>سبب التأخير<select value={form.delay_reason_id || ''} onChange={(e) => setValue('delay_reason_id', e.target.value)}>
-          <option value="">بدون</option>{delayReasons.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
-        </select></label>
-        <label>شرح السبب<input value={form.delay_reason_text || ''} onChange={(e) => setValue('delay_reason_text', e.target.value)} /></label>
+        {taskId && <>
+          <label>سبب التأخير<select value={form.delay_reason_id || ''} onChange={(e) => setValue('delay_reason_id', e.target.value)}>
+            <option value="">بدون</option>{delayReasons.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
+          </select></label>
+          <label>شرح السبب<input value={form.delay_reason_text || ''} onChange={(e) => setValue('delay_reason_text', e.target.value)} /></label>
+        </>}
         {form.status === 'blocked' && <label className="span-2">سبب الانتظار<textarea required value={form.hold_reason_text || ''} onChange={(e) => setValue('hold_reason_text', e.target.value)} /></label>}
-        <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>
+        {taskId && <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>}
         <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>
         {!taskId && (
           <label className="span-2 file-upload">

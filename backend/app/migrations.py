@@ -41,6 +41,14 @@ def apply_migrations():
                 "WHERE status = 'in_progress' AND timer_started_at IS NULL"
             )
         )
+        connection.execute(
+            text(
+                "UPDATE tasks "
+                "SET status = 'blocked', "
+                "hold_reason_text = COALESCE(hold_reason_text, delay_reason_text, 'Moved from late bucket') "
+                "WHERE status = 'delayed'"
+            )
+        )
         connection.execute(text("ALTER TABLE task_status_history ADD COLUMN IF NOT EXISTS reason_text TEXT"))
         connection.execute(
             text(

@@ -55,9 +55,11 @@ export default function MyTasks({ user, openTask }) {
         body: JSON.stringify(payload),
       })
       setTasks((current) => replaceTask(current, updatedTask))
+      return updatedTask
     } catch (err) {
       setTasks((current) => replaceTask(current, task))
       setError(err.message)
+      return task
     }
   }
 

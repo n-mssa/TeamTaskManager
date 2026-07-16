@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
-import { statusLabels } from '../utils/labels'
+import { statusOptions } from '../utils/labels'
 import { isOverExpected, optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 import { AlertTriangle, CheckCircle2, Clock3, ListTodo, PlayCircle } from 'lucide-react'
 
@@ -68,9 +68,11 @@ export default function Dashboard({ user, openTask, createTask }) {
         body: JSON.stringify(payload),
       })
       reconcileTask(updatedTask)
+      return updatedTask
     } catch (err) {
       reconcileTask(task)
       setError(err.message)
+      return task
     }
   }
 
@@ -88,12 +90,12 @@ export default function Dashboard({ user, openTask, createTask }) {
         <Stat icon={Clock3} value={summary.pending} label="بانتظار التنفيذ" tone="amber" />
         <Stat icon={PlayCircle} value={summary.inProgress} label="قيد التنفيذ" tone="blue" />
         <Stat icon={CheckCircle2} value={summary.done} label="منجزة" tone="green" />
-        <Stat icon={AlertTriangle} value={summary.delayed} label="متأخرة" tone="red" />
+        <Stat icon={AlertTriangle} value={summary.delayed} label="تجاوزت الوقت" tone="red" />
       </div>
       <div className="filters compact">
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="">كل الحالات</option>
-          {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <input value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} placeholder="رقم الموظف" />
       </div>

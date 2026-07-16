@@ -69,7 +69,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       <div className="page-head">
         <h1>{task.title}</h1>
         <div className="actions">
-          <button className="primary" onClick={() => editTask(task.id)}>تعديل مهمة</button>
+          {user.role !== 'employee' && <button className="primary" onClick={() => editTask(task.id)}>تعديل مهمة</button>}
           {user.role === 'admin' && <button className="danger" onClick={deleteTask}>حذف المهمة</button>}
         </div>
       </div>

@@ -24,9 +24,8 @@ export const boardColumns = [
   { value: 'pending', label: statusLabels.pending },
   { value: 'in_progress', label: statusLabels.in_progress },
   { value: 'blocked', label: statusLabels.blocked },
-  { value: 'delayed', label: statusLabels.delayed },
   { value: 'done', label: statusLabels.done },
 ]
 
-export const statusOptions = Object.entries(statusLabels)
+export const statusOptions = Object.entries(statusLabels).filter(([value]) => value !== 'delayed')
 export const priorityOptions = Object.entries(priorityLabels)
