@@ -120,14 +120,21 @@ function KpiPanel({ kpi }) {
   if (!kpi) return null
   return (
     <article className="panel kpi-panel">
-      <h2>مؤشر الالتزام بالوقت</h2>
+      <div className="panel-title-with-help">
+        <h2>مؤشر الالتزام بالوقت</h2>
+        <span className="help-tooltip" tabIndex="0" aria-label="طريقة احتساب مؤشر الالتزام">
+          ?
+          <span className="help-tooltip-content" role="tooltip">
+            المعادلة: نسبة الالتزام = 100 - ((ساعات التأخير المحتسبة ÷ ساعات الوقت المتوقع) × 100)
+          </span>
+        </span>
+      </div>
       <div className="kpi-grid">
         <div><strong>{kpi.commitment_rate}%</strong><span>نسبة الالتزام</span></div>
         <div><strong>{kpi.delay_rate}%</strong><span>نسبة التأخير المحتسبة</span></div>
         <div><strong>{kpi.attributable_delay_hours}</strong><span>ساعات التأخير المحتسبة</span></div>
         <div><strong>{kpi.total_estimated_hours}</strong><span>ساعات الوقت المتوقع</span></div>
       </div>
-      <p className="note">المعادلة: نسبة الالتزام = 100 - ((ساعات التأخير المحتسبة ÷ ساعات الوقت المتوقع) × 100)</p>
     </article>
   )
 }
