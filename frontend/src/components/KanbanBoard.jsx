@@ -9,6 +9,7 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
   const [, setTick] = useState(0)
   const [delayReasons, setDelayReasons] = useState([])
   const [overrunRequest, setOverrunRequest] = useState(null)
+  const [finishRequest, setFinishRequest] = useState(null)
   const promptedOverruns = useRef(new Set())
 
   useEffect(() => {
@@ -60,6 +61,10 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
       setOverrunRequest({ task, nextStatus: status })
       return
     }
+    if (needsCompletionComplaint(task, status, user)) {
+      setFinishRequest(task)
+      return
+    }
     onMove(task, status)
   }
 
@@ -68,7 +73,20 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
     const { task, nextStatus } = overrunRequest
     setOverrunRequest(null)
     const updatedTask = await onOverrun(task, reason)
-    if (nextStatus) onMove(updatedTask || { ...task, overrun_reason_text: reason }, nextStatus)
+    const taskWithReason = updatedTask || { ...task, overrun_reason_text: reason.text || reason, overrun_reason_category: reason.category || 'on_employee' }
+    if (nextStatus === 'done' && needsCompletionComplaint(taskWithReason, nextStatus, user)) {
+      setFinishRequest(taskWithReason)
+      return
+    }
+    if (nextStatus) onMove(taskWithReason, nextStatus)
+  }
+
+  function finishTask(complaintText = '') {
+    if (!finishRequest) return
+    const extra = complaintText.trim() ? { expected_time_complaint_text: complaintText.trim() } : {}
+    const task = finishRequest
+    setFinishRequest(null)
+    onMove(task, 'done', extra)
   }
 
   return (
@@ -104,6 +122,13 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
           onSubmit={submitOverrunReason}
         />
       )}
+      {finishRequest && (
+        <CompletionComplaintModal
+          task={finishRequest}
+          onCancel={() => setFinishRequest(null)}
+          onFinish={finishTask}
+        />
+      )}
     </>
   )
 }
@@ -116,9 +141,16 @@ function needsOverrunReason(task, nextStatus, user) {
     && !task.overrun_reason_text
 }
 
+function needsCompletionComplaint(task, nextStatus, user) {
+  return nextStatus === 'done'
+    && task.status !== 'done'
+    && user?.id === task.assigned_to_user_id
+}
+
 function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
   const visibleReasons = reasons.filter((item) => !isOtherReasonLabel(item.name_ar) && !isOtherReasonLabel(item.name_en))
   const [selectedReason, setSelectedReason] = useState(visibleReasons[0]?.name_ar || '__other')
+  const [category, setCategory] = useState('on_employee')
   const [customReason, setCustomReason] = useState('')
   const [error, setError] = useState('')
   const isOther = selectedReason === '__other'
@@ -134,7 +166,7 @@ function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
       setError('يرجى اختيار سبب أو كتابة سبب آخر.')
       return
     }
-    onSubmit(reason)
+    onSubmit({ text: reason, category })
   }
 
   return (
@@ -158,6 +190,13 @@ function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
             <textarea value={customReason} onChange={(event) => { setCustomReason(event.target.value); setError('') }} autoFocus />
           </label>
         )}
+        <label>على من يُحسب التأخير؟
+          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="on_employee">على الموظف</option>
+            <option value="shared">سبب مشترك</option>
+            <option value="external">سبب خارجي</option>
+          </select>
+        </label>
         {error && <p className="error">{error}</p>}
         <div className="briefing-actions">
           <button type="button" onClick={onCancel}>إلغاء</button>
@@ -171,6 +210,32 @@ function OverrunReasonModal({ task, reasons, onCancel, onSubmit }) {
 function isOtherReasonLabel(label) {
   const normalized = String(label || '').trim().toLowerCase()
   return ['other', 'others', 'سبب آخر', 'اخرى', 'أخرى'].includes(normalized)
+}
+
+function CompletionComplaintModal({ task, onCancel, onFinish }) {
+  const [complaintText, setComplaintText] = useState('')
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onCancel}>
+      <form className="briefing-modal reason-modal" role="dialog" aria-modal="true" onSubmit={(event) => { event.preventDefault(); onFinish(complaintText) }} onClick={(event) => event.stopPropagation()}>
+        <header className="briefing-head">
+          <div>
+            <p className="eyebrow">إنهاء المهمة</p>
+            <h2>هل الوقت المتوقع كان مناسباً؟</h2>
+          </div>
+        </header>
+        <p className="note">المهمة: <strong>{task.title}</strong></p>
+        <label>اعتراض اختياري على الوقت المتوقع
+          <textarea value={complaintText} onChange={(event) => setComplaintText(event.target.value)} placeholder="مثال: الوقت المتوقع كان أقل من المطلوب بسبب كثرة التعديلات." />
+        </label>
+        <div className="briefing-actions">
+          <button type="button" onClick={onCancel}>إلغاء</button>
+          <button type="button" onClick={() => onFinish('')}>إنهاء بدون اعتراض</button>
+          <button className="primary" type="submit">إنهاء وإرسال الاعتراض</button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 function TaskCard({ task, onOpen, onDragStart }) {

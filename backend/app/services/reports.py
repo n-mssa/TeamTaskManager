@@ -6,6 +6,13 @@ from sqlalchemy.orm import Session, joinedload
 from ..models import Department, DelayReason, Task, TaskStatus, User, UserRole
 
 
+DELAY_CATEGORY_COEFFICIENTS = {
+    "on_employee": 1.0,
+    "shared": 0.5,
+    "external": 0.0,
+}
+
+
 def role_value(user: User):
     return getattr(user.role, "value", user.role)
 
@@ -37,6 +44,11 @@ def scoped_tasks(db: Session, current_user: User, department_id: int | None = No
 
 def task_row(task: Task):
     over_expected = task.is_over_expected
+    actual_hours = (task.elapsed_seconds or 0) / 3600
+    expected_hours = (task.expected_minutes or 0) / 60
+    delay_hours = max(actual_hours - expected_hours, 0)
+    category = getattr(task.overrun_reason_category, "value", task.overrun_reason_category) or "on_employee"
+    attributable_delay_hours = delay_hours * DELAY_CATEGORY_COEFFICIENTS.get(category, 1.0) if task.overrun_reason_approved else 0
     return {
         "id": task.id,
         "title": task.title,
@@ -49,11 +61,43 @@ def task_row(task: Task):
         "assigned_date": task.due_date.isoformat(),
         "due_date": task.due_date.isoformat(),
         "elapsed_seconds": task.elapsed_seconds,
+        "actual_hours": round(actual_hours, 2),
+        "delay_hours": round(delay_hours, 2),
+        "attributable_delay_hours": round(attributable_delay_hours, 2),
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "is_late": over_expected,
         "is_overdue": bool(over_expected and task.status not in {TaskStatus.done, TaskStatus.cancelled}),
         "delay_reason": task.delay_reason.name_ar if task.delay_reason else None,
         "delay_reason_text": task.delay_reason_text,
+        "overrun_reason_text": task.overrun_reason_text,
+        "overrun_reason_category": category,
+        "overrun_reason_approved": task.overrun_reason_approved,
+        "expected_time_complaint_text": task.expected_time_complaint_text,
+        "expected_time_complaint_at": task.expected_time_complaint_at.isoformat() if task.expected_time_complaint_at else None,
+    }
+
+
+def kpi_summary(tasks: list[Task]):
+    completed_tasks = [task for task in tasks if task.status == TaskStatus.done]
+    total_estimated_hours = sum((task.expected_minutes or 0) / 60 for task in completed_tasks)
+    total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 for task in completed_tasks)
+    total_delay_hours = sum(max(((task.elapsed_seconds or 0) / 3600) - ((task.expected_minutes or 0) / 60), 0) for task in completed_tasks)
+    attributable_delay_hours = 0.0
+    for task in completed_tasks:
+        delay_hours = max(((task.elapsed_seconds or 0) / 3600) - ((task.expected_minutes or 0) / 60), 0)
+        category = getattr(task.overrun_reason_category, "value", task.overrun_reason_category) or "on_employee"
+        if task.overrun_reason_approved:
+            attributable_delay_hours += delay_hours * DELAY_CATEGORY_COEFFICIENTS.get(category, 1.0)
+    delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else 0
+    return {
+        "completed_tasks": len(completed_tasks),
+        "total_estimated_hours": round(total_estimated_hours, 2),
+        "total_actual_hours": round(total_actual_hours, 2),
+        "overdue_tasks": sum(1 for task in completed_tasks if task.is_over_expected),
+        "total_delay_hours": round(total_delay_hours, 2),
+        "attributable_delay_hours": round(attributable_delay_hours, 2),
+        "delay_rate": round(delay_rate, 2),
+        "commitment_rate": round(max(0, 100 - delay_rate), 2),
     }
 
 
@@ -111,6 +155,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
             "completed_late": len(completed_late),
             "expected_minutes": sum(task.expected_minutes for task in all_tasks),
         },
+        "kpi": kpi_summary(completed),
         "completed_tasks": [task_row(task) for task in completed],
         "pending_in_progress_tasks": [task_row(task) for task in pending_work],
         "delayed_tasks": [task_row(task) for task in delayed],

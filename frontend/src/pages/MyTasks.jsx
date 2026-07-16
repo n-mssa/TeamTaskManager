@@ -32,8 +32,8 @@ export default function MyTasks({ user, openTask }) {
     return tasks.filter((task) => task.status === filter)
   }, [filter, tasks])
 
-  async function updateStatus(task, status) {
-    const payload = statusChangePayload(task, status, user)
+  async function updateStatus(task, status, extra = {}) {
+    const payload = statusChangePayload(task, status, user, extra)
     if (!payload) return
     setTasks((current) => replaceTask(current, optimisticStatusTask(task, payload)))
     setError('')
@@ -47,8 +47,10 @@ export default function MyTasks({ user, openTask }) {
   }
 
   async function saveOverrunReason(task, reason) {
-    const payload = { status: task.status, overrun_reason_text: reason }
-    setTasks((current) => replaceTask(current, { ...task, overrun_reason_text: reason }))
+    const reasonText = typeof reason === 'string' ? reason : reason.text
+    const category = typeof reason === 'string' ? 'on_employee' : reason.category
+    const payload = { status: task.status, overrun_reason_text: reasonText, overrun_reason_category: category }
+    setTasks((current) => replaceTask(current, { ...task, overrun_reason_text: reasonText, overrun_reason_category: category }))
     try {
       const updatedTask = await api(`/tasks/${task.id}/status`, {
         method: 'PATCH',

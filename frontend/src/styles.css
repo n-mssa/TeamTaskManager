@@ -745,6 +745,43 @@ small,
   text-align: left;
 }
 
+.kpi-panel {
+  margin-bottom: 16px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.kpi-grid div {
+  padding: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.kpi-grid strong {
+  display: block;
+  color: var(--accent);
+  font-size: 24px;
+}
+
+.kpi-grid span,
+.delay-review span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.delay-review {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .filters,
 .actions,
 .inline-form {

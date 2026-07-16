@@ -22,8 +22,8 @@ export function remainingExpectedSeconds(task) {
   return task.expected_minutes * 60 - elapsedSeconds(task)
 }
 
-export function statusChangePayload(task, nextStatus, user) {
-  const payload = { status: nextStatus }
+export function statusChangePayload(task, nextStatus, user, extra = {}) {
+  const payload = { status: nextStatus, ...extra }
   const taskTitle = task.title ? `\n${task.title}` : ''
 
   if (nextStatus === 'blocked') {

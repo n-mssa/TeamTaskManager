@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
+from ..models import DelayReasonCategory, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
-from ..schemas import CommentCreate, CommentOut, HistoryOut, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import CommentCreate, CommentOut, DelayReviewUpdate, HistoryOut, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -127,6 +127,25 @@ def notify_task_assigned(db: Session, task: Task, assignee_id: int):
     )
 
 
+def notify_expected_time_complaint(db: Session, task: Task):
+    recipients = set()
+    if task.department and task.department.manager_id:
+        recipients.add(task.department.manager_id)
+    admin_ids = [row[0] for row in db.query(User.id).filter(User.role == UserRole.admin, User.is_active.is_(True)).all()]
+    recipients.update(admin_ids)
+    recipients.discard(task.assigned_to_user_id)
+    for user_id in recipients:
+        db.add(
+            Notification(
+                user_id=user_id,
+                task=task,
+                title="اعتراض على الوقت المتوقع",
+                message=f"تم إرسال اعتراض على الوقت المتوقع للمهمة: {task.title}",
+                notification_type="expected_time_complaint",
+            )
+        )
+
+
 def create_task_record(payload: TaskCreate, db: Session, current_user: User):
     payload = payload.model_copy(
         update={
@@ -135,7 +154,11 @@ def create_task_record(payload: TaskCreate, db: Session, current_user: User):
             "delay_reason_text": None,
             "hold_reason_text": None,
             "overrun_reason_text": None,
-        }
+            "overrun_reason_category": DelayReasonCategory.on_employee,
+            "overrun_reason_approved": False,
+            "expected_time_complaint_text": None,
+            "expected_time_complaint_at": None,
+            }
     )
     assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
     if not assignee or not assignee.is_active:
@@ -334,7 +357,28 @@ def update_status(task_id: int, payload: TaskStatusUpdate, db: Session = Depends
         task.hold_reason_text = payload.hold_reason_text
     if payload.overrun_reason_text:
         task.overrun_reason_text = payload.overrun_reason_text
+        task.overrun_reason_category = payload.overrun_reason_category or task.overrun_reason_category
+        task.overrun_reason_approved = False
+    new_complaint = False
+    if payload.status == TaskStatus.done and payload.expected_time_complaint_text and current_user.id == task.assigned_to_user_id:
+        task.expected_time_complaint_text = payload.expected_time_complaint_text.strip()
+        task.expected_time_complaint_at = datetime.now(timezone.utc)
+        new_complaint = True
     apply_status_effects(task, old_status, payload.status, current_user, db)
+    if new_complaint:
+        notify_expected_time_complaint(db, task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/{task_id}/delay-review", response_model=TaskOut)
+def review_delay_reason(task_id: int, payload: DelayReviewUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    if current_user.role not in {UserRole.admin, UserRole.manager}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
+    task.overrun_reason_category = payload.overrun_reason_category
+    task.overrun_reason_approved = payload.overrun_reason_approved
     db.commit()
     db.refresh(task)
     return task

@@ -30,6 +30,12 @@ class TaskStatus(str, Enum):
     cancelled = "cancelled"
 
 
+class DelayReasonCategory(str, Enum):
+    on_employee = "on_employee"
+    shared = "shared"
+    external = "external"
+
+
 class Department(Base):
     __tablename__ = "departments"
 
@@ -96,6 +102,10 @@ class Task(Base):
     delay_reason_text = Column(Text, nullable=True)
     hold_reason_text = Column(Text, nullable=True)
     overrun_reason_text = Column(Text, nullable=True)
+    overrun_reason_category = Column(SQLEnum(DelayReasonCategory), nullable=False, default=DelayReasonCategory.on_employee)
+    overrun_reason_approved = Column(Boolean, default=False, nullable=False)
+    expected_time_complaint_text = Column(Text, nullable=True)
+    expected_time_complaint_at = Column(DateTime(timezone=True), nullable=True)
     manager_notes = Column(Text, nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

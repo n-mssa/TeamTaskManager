@@ -9,11 +9,18 @@ function formatFileSize(bytes) {
   return `${bytes} B`
 }
 
+const delayCategoryLabels = {
+  on_employee: 'على الموظف',
+  shared: 'سبب مشترك',
+  external: 'سبب خارجي',
+}
+
 export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [task, setTask] = useState(null)
   const [comments, setComments] = useState([])
   const [history, setHistory] = useState([])
   const [comment, setComment] = useState('')
+  const [delayCategory, setDelayCategory] = useState('on_employee')
   const [, setTick] = useState(0)
 
   async function load() {
@@ -23,6 +30,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       api(`/tasks/${taskId}/history`),
     ])
     setTask(nextTask)
+    setDelayCategory(nextTask.overrun_reason_category || 'on_employee')
     setComments(nextComments)
     setHistory(nextHistory)
   }
@@ -63,7 +71,16 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     window.URL.revokeObjectURL(url)
   }
 
+  async function saveDelayReview(approved) {
+    const updatedTask = await api(`/tasks/${task.id}/delay-review`, {
+      method: 'PATCH',
+      body: JSON.stringify({ overrun_reason_category: delayCategory, overrun_reason_approved: approved }),
+    })
+    setTask(updatedTask)
+  }
+
   if (!task) return <div className="empty">جار التحميل...</div>
+  const canReviewDelay = user.role === 'admin' || user.role === 'manager'
   return (
     <section>
       <div className="page-head">
@@ -102,7 +119,34 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       </article>
       <article className="panel"><h2>سبب التأخير</h2><p>{task.delay_reason?.name_ar || task.delay_reason_text || 'لا يوجد.'}</p></article>
       <article className="panel"><h2>سبب الانتظار</h2><p>{task.hold_reason_text || 'لا يوجد.'}</p></article>
-      <article className="panel"><h2>سبب تجاوز الوقت المتوقع</h2><p>{task.overrun_reason_text || 'لا يوجد.'}</p></article>
+      <article className="panel">
+        <h2>سبب تجاوز الوقت المتوقع</h2>
+        <p>{task.overrun_reason_text || 'لا يوجد.'}</p>
+        {task.overrun_reason_text && (
+          <div className="delay-review">
+            <span>التصنيف الحالي: {delayCategoryLabels[task.overrun_reason_category] || delayCategoryLabels.on_employee}</span>
+            <span>الاعتماد: {task.overrun_reason_approved ? 'معتمد' : 'بانتظار الاعتماد'}</span>
+            {canReviewDelay && (
+              <div className="inline-form">
+                <select value={delayCategory} onChange={(event) => setDelayCategory(event.target.value)}>
+                  <option value="on_employee">على الموظف</option>
+                  <option value="shared">سبب مشترك</option>
+                  <option value="external">سبب خارجي</option>
+                </select>
+                <button type="button" onClick={() => saveDelayReview(true)}>اعتماد</button>
+                <button type="button" onClick={() => saveDelayReview(false)}>إلغاء الاعتماد</button>
+              </div>
+            )}
+          </div>
+        )}
+      </article>
+      {task.expected_time_complaint_text && (
+        <article className="panel">
+          <h2>اعتراض على الوقت المتوقع</h2>
+          <p>{task.expected_time_complaint_text}</p>
+          <small>{task.expected_time_complaint_at || ''}</small>
+        </article>
+      )}
       <article className="panel">
         <h2>التعليقات</h2>
         <form className="inline-form" onSubmit={addComment}>

@@ -45,8 +45,8 @@ export default function Dashboard({ user, openTask, createTask }) {
     })
   }
 
-  async function updateStatus(task, nextStatus) {
-    const payload = statusChangePayload(task, nextStatus, user)
+  async function updateStatus(task, nextStatus, extra = {}) {
+    const payload = statusChangePayload(task, nextStatus, user, extra)
     if (!payload) return
     reconcileTask(optimisticStatusTask(task, payload))
     setError('')
@@ -60,8 +60,10 @@ export default function Dashboard({ user, openTask, createTask }) {
   }
 
   async function saveOverrunReason(task, reason) {
-    const payload = { status: task.status, overrun_reason_text: reason }
-    reconcileTask({ ...task, overrun_reason_text: reason })
+    const reasonText = typeof reason === 'string' ? reason : reason.text
+    const category = typeof reason === 'string' ? 'on_employee' : reason.category
+    const payload = { status: task.status, overrun_reason_text: reasonText, overrun_reason_category: category }
+    reconcileTask({ ...task, overrun_reason_text: reasonText, overrun_reason_category: category })
     try {
       const updatedTask = await api(`/tasks/${task.id}/status`, {
         method: 'PATCH',

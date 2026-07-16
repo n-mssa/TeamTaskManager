@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import TaskPriority, TaskStatus, UserRole
+from .models import DelayReasonCategory, TaskPriority, TaskStatus, UserRole
 
 
 class Token(BaseModel):
@@ -140,6 +140,13 @@ class TaskStatusUpdate(BaseModel):
     delay_reason_text: Optional[str] = None
     hold_reason_text: Optional[str] = None
     overrun_reason_text: Optional[str] = None
+    overrun_reason_category: Optional[DelayReasonCategory] = None
+    expected_time_complaint_text: Optional[str] = None
+
+
+class DelayReviewUpdate(BaseModel):
+    overrun_reason_category: DelayReasonCategory
+    overrun_reason_approved: bool = True
 
 
 class TaskDelete(BaseModel):
@@ -167,6 +174,10 @@ class TaskOut(TaskBase):
     elapsed_seconds: int
     is_over_expected: bool
     completed_at: Optional[datetime]
+    overrun_reason_category: DelayReasonCategory = DelayReasonCategory.on_employee
+    overrun_reason_approved: bool = False
+    expected_time_complaint_text: Optional[str] = None
+    expected_time_complaint_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     assignee: Optional[UserOut] = None
