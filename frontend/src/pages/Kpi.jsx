@@ -121,16 +121,6 @@ function KpiBreakdown({ rows }) {
 }
 
 function KpiCharts({ report, rows }) {
-  const statusData = [
-    { label: 'بانتظار التنفيذ', value: report.summary.pending || 0, color: '#f59e0b' },
-    { label: 'قيد التنفيذ', value: report.summary.in_progress || 0, color: '#2563eb' },
-    { label: 'منجزة', value: report.summary.completed_this_week || 0, color: '#10b981' },
-    { label: 'تجاوزت الوقت', value: report.summary.delayed || 0, color: '#ef4444' },
-  ].filter((item) => item.value > 0)
-  const employeeData = (report.by_employee || []).slice(0, 8).map((item) => ({
-    label: item.employee,
-    value: (item.done || 0) + (item.in_progress || 0) + (item.pending || 0) + (item.delayed || 0),
-  })).filter((item) => item.value > 0)
   const delayData = (report.delay_reasons || []).slice(0, 6).map((item) => ({ label: item.reason, value: item.count || 0 })).filter((item) => item.value > 0)
   const timingData = [
     { label: 'قبل الوقت المتوقع', value: rows.filter(isFinishedEarly).length },
@@ -141,14 +131,6 @@ function KpiCharts({ report, rows }) {
   return (
     <div className="report-charts">
       <article className="panel chart-card">
-        <h2>توزيع الحالات</h2>
-        <PieChart data={statusData} />
-      </article>
-      <article className="panel chart-card">
-        <h2>المهام حسب الموظف</h2>
-        <BarChart data={employeeData} />
-      </article>
-      <article className="panel chart-card">
         <h2>أسباب تجاوز الوقت</h2>
         <BarChart data={delayData} />
       </article>
@@ -156,28 +138,6 @@ function KpiCharts({ report, rows }) {
         <h2>سرعة الإنجاز</h2>
         <BarChart data={timingData} />
       </article>
-    </div>
-  )
-}
-
-function PieChart({ data }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0)
-  if (!total) return <EmptyState compact title="لا توجد بيانات للرسم" description="ستظهر الرسوم عند توفر مهام ضمن الفترة المحددة." />
-  let offset = 25
-  return (
-    <div className="pie-chart-wrap">
-      <svg className="pie-chart" viewBox="0 0 42 42" role="img" aria-label="توزيع الحالات">
-        <circle className="pie-hole" cx="21" cy="21" r="15.915" />
-        {data.map((item) => {
-          const dash = (item.value / total) * 100
-          const segment = <circle key={item.label} cx="21" cy="21" r="15.915" fill="transparent" stroke={item.color} strokeWidth="8" strokeDasharray={`${dash} ${100 - dash}`} strokeDashoffset={offset} />
-          offset -= dash
-          return segment
-        })}
-      </svg>
-      <div className="chart-legend">
-        {data.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}: {item.value}</span>)}
-      </div>
     </div>
   )
 }
