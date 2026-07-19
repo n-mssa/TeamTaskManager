@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, BarChart3, Bell, Building2, Check, Clock, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
@@ -26,6 +26,8 @@ export default function App() {
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
   const [endOfDayPrompt, setEndOfDayPrompt] = useState(null)
   const [expectedTimeReview, setExpectedTimeReview] = useState(null)
+  const historyReady = useRef(false)
+  const handlingHistoryPop = useRef(false)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -41,6 +43,36 @@ export default function App() {
       })
       .catch(() => setRoute('login'))
   }, [])
+
+  useEffect(() => {
+    const handlePopState = (event) => {
+      const state = event.state
+      if (!state?.teamTasksRoute) return
+      handlingHistoryPop.current = true
+      setSelectedTask(state.selectedTask || null)
+      setRoute(state.route)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    if (route === 'loading') return
+    const state = { teamTasksRoute: true, route, selectedTask }
+    const hash = selectedTask ? `#${route}/${selectedTask}` : `#${route}`
+    if (!historyReady.current) {
+      window.history.replaceState(state, '', hash)
+      historyReady.current = true
+      return
+    }
+    if (handlingHistoryPop.current) {
+      handlingHistoryPop.current = false
+      return
+    }
+    const currentState = window.history.state
+    if (currentState?.teamTasksRoute && currentState.route === route && currentState.selectedTask === selectedTask) return
+    window.history.pushState(state, '', hash)
+  }, [route, selectedTask])
 
   useEffect(() => {
     if (!user) return
@@ -133,6 +165,9 @@ export default function App() {
     setNotificationsOpen(false)
     setToast(null)
     setEndOfDayPrompt(null)
+    setExpectedTimeReview(null)
+    historyReady.current = false
+    handlingHistoryPop.current = false
     setRoute('login')
   }
 
