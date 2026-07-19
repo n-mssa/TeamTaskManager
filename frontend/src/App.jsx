@@ -281,7 +281,7 @@ export default function App() {
           {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
           {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => setRoute(defaultRoute(user.role))} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
-          {route === 'reports' && <Reports user={user} />}
+          {route === 'reports' && <Reports user={user} openTask={openTask} />}
           {route === 'kpi' && <Kpi user={user} />}
           {route === 'users' && <Users />}
           {route === 'departments' && <Departments />}

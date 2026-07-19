@@ -13,7 +13,7 @@ const summaryLabels = {
   expected_minutes: 'إجمالي الوقت المتوقع بالدقائق',
 }
 
-export default function Reports({ user }) {
+export default function Reports({ user, openTask }) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [userId, setUserId] = useState('')
@@ -41,8 +41,8 @@ export default function Reports({ user }) {
 
   function exportCsv() {
     const rows = [...(displayedReport?.completed_tasks || []), ...(displayedReport?.pending_in_progress_tasks || []), ...(displayedReport?.delayed_tasks || [])]
-    const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع']
-      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, row.assigned_date || row.due_date, row.completed_at || '', row.is_late ? 'نعم' : 'لا'].join(',')))
+    const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز']
+      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, row.assigned_date || row.due_date, row.completed_at || '', row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)].join(',')))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
@@ -74,9 +74,9 @@ export default function Reports({ user }) {
         {Object.entries(displayedReport.summary).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{summaryLabels[key] || key}</span></div>)}
       </div>
       <ReportCharts report={displayedReport} />
-      <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} />
-      <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} />
-      <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} />
+      <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} onOpenTask={openTask} />
+      <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} />
+      <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} onOpenTask={openTask} />
     </section>
   )
 }
@@ -196,17 +196,52 @@ function summarizeRowsByEmployee(rows) {
   return Array.from(grouped.values())
 }
 
-function ReportTable({ title, rows }) {
+function ReportTable({ title, rows, onOpenTask }) {
   return (
     <article className="panel">
       <h2>{title}<small>{rows.length} مهمة</small></h2>
       {rows.length
         ? <div className="table-wrap">
-          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>القسم</th><th>الحالة</th><th>تاريخ الإسناد</th><th>تاريخ الإنجاز</th><th>تجاوزت الوقت؟</th></tr></thead>
-            <tbody>{rows.map((row) => <tr key={`${title}-${row.id}`}><td>{row.title}</td><td>{row.assignee}</td><td>{row.department}</td><td>{statusLabels[row.status] || row.status}</td><td>{row.assigned_date || row.due_date}</td><td>{row.completed_at || '-'}</td><td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td></tr>)}</tbody>
+          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>القسم</th><th>الحالة</th><th>تاريخ الإسناد</th><th>تاريخ الإنجاز</th><th>تجاوزت الوقت؟</th><th>مدة التجاوز</th></tr></thead>
+            <tbody>{rows.map((row) => (
+              <tr
+                key={`${title}-${row.id}`}
+                className={onOpenTask ? 'clickable-row' : ''}
+                onClick={() => onOpenTask?.(row.id)}
+                tabIndex={onOpenTask ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (!onOpenTask) return
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onOpenTask(row.id)
+                  }
+                }}
+                title={onOpenTask ? 'فتح تفاصيل المهمة' : undefined}
+              >
+                <td>{row.title}</td>
+                <td>{row.assignee}</td>
+                <td>{row.department}</td>
+                <td>{statusLabels[row.status] || row.status}</td>
+                <td>{row.assigned_date || row.due_date}</td>
+                <td>{row.completed_at || '-'}</td>
+                <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
+                <td>{formatOverrun(row)}</td>
+              </tr>
+            ))}</tbody>
           </table>
         </div>
         : <EmptyState compact title="لا توجد مهام في هذا القسم" description="ستظهر المهام هنا عند توفر بيانات ضمن الفترة المحددة." />}
     </article>
   )
+}
+
+function formatOverrun(row) {
+  const delayHours = Number(row.delay_hours) || 0
+  if (delayHours <= 0) return '-'
+  const totalMinutes = Math.round(delayHours * 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours && minutes) return `${hours}س ${minutes}د`
+  if (hours) return `${hours}س`
+  return `${minutes}د`
 }
