@@ -64,6 +64,7 @@ export default function Kpi({ user, openTask }) {
       {error && <p className="error">{error}</p>}
       <KpiPanel kpi={displayedReport.kpi} />
       <KpiBreakdown rows={kpiRows} />
+      <KpiCharts report={displayedReport} rows={kpiRows} />
       <ReviewTable rows={reviewRows} onOpenTask={openTask} />
     </section>
   )
@@ -100,19 +101,99 @@ function KpiBreakdown({ rows }) {
   const totals = rows.reduce((current, row) => {
     current.evaluated += 1
     if (row.status === 'done') current.done += 1
+    if (isFinishedEarly(row)) current.early += 1
     if (row.is_late || row.is_overdue) current.overrun += 1
     if (row.overrun_reason_text && !row.overrun_reason_approved) current.unreviewed += 1
     if (row.production_issue_flagged) current.productionFlags += 1
     return current
-  }, { evaluated: 0, done: 0, overrun: 0, unreviewed: 0, productionFlags: 0 })
+  }, { evaluated: 0, done: 0, early: 0, overrun: 0, unreviewed: 0, productionFlags: 0 })
 
   return (
     <div className="stats">
       <div><strong>{totals.evaluated}</strong><span>مهام داخلة في KPI</span></div>
       <div><strong>{totals.done}</strong><span>مهام منجزة</span></div>
+      <div><strong>{totals.early}</strong><span>أنجزت قبل الوقت المتوقع</span></div>
       <div><strong>{totals.overrun}</strong><span>تجاوزت الوقت</span></div>
       <div><strong>{totals.unreviewed}</strong><span>بانتظار مراجعة السبب</span></div>
       <div><strong>{totals.productionFlags}</strong><span>أعلام إنتاج</span></div>
+    </div>
+  )
+}
+
+function KpiCharts({ report, rows }) {
+  const statusData = [
+    { label: 'بانتظار التنفيذ', value: report.summary.pending || 0, color: '#f59e0b' },
+    { label: 'قيد التنفيذ', value: report.summary.in_progress || 0, color: '#2563eb' },
+    { label: 'منجزة', value: report.summary.completed_this_week || 0, color: '#10b981' },
+    { label: 'تجاوزت الوقت', value: report.summary.delayed || 0, color: '#ef4444' },
+  ].filter((item) => item.value > 0)
+  const employeeData = (report.by_employee || []).slice(0, 8).map((item) => ({
+    label: item.employee,
+    value: (item.done || 0) + (item.in_progress || 0) + (item.pending || 0) + (item.delayed || 0),
+  })).filter((item) => item.value > 0)
+  const delayData = (report.delay_reasons || []).slice(0, 6).map((item) => ({ label: item.reason, value: item.count || 0 })).filter((item) => item.value > 0)
+  const timingData = [
+    { label: 'قبل الوقت المتوقع', value: rows.filter(isFinishedEarly).length },
+    { label: 'ضمن الوقت', value: rows.filter((row) => row.status === 'done' && !isFinishedEarly(row) && !(row.is_late || row.is_overdue)).length },
+    { label: 'تجاوزت الوقت', value: rows.filter((row) => row.is_late || row.is_overdue).length },
+  ].filter((item) => item.value > 0)
+
+  return (
+    <div className="report-charts">
+      <article className="panel chart-card">
+        <h2>توزيع الحالات</h2>
+        <PieChart data={statusData} />
+      </article>
+      <article className="panel chart-card">
+        <h2>المهام حسب الموظف</h2>
+        <BarChart data={employeeData} />
+      </article>
+      <article className="panel chart-card">
+        <h2>أسباب تجاوز الوقت</h2>
+        <BarChart data={delayData} />
+      </article>
+      <article className="panel chart-card">
+        <h2>سرعة الإنجاز</h2>
+        <BarChart data={timingData} />
+      </article>
+    </div>
+  )
+}
+
+function PieChart({ data }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+  if (!total) return <EmptyState compact title="لا توجد بيانات للرسم" description="ستظهر الرسوم عند توفر مهام ضمن الفترة المحددة." />
+  let offset = 25
+  return (
+    <div className="pie-chart-wrap">
+      <svg className="pie-chart" viewBox="0 0 42 42" role="img" aria-label="توزيع الحالات">
+        <circle className="pie-hole" cx="21" cy="21" r="15.915" />
+        {data.map((item) => {
+          const dash = (item.value / total) * 100
+          const segment = <circle key={item.label} cx="21" cy="21" r="15.915" fill="transparent" stroke={item.color} strokeWidth="8" strokeDasharray={`${dash} ${100 - dash}`} strokeDashoffset={offset} />
+          offset -= dash
+          return segment
+        })}
+      </svg>
+      <div className="chart-legend">
+        {data.map((item) => <span key={item.label}><i style={{ background: item.color }} />{item.label}: {item.value}</span>)}
+      </div>
+    </div>
+  )
+}
+
+function BarChart({ data }) {
+  const max = Math.max(...data.map((item) => item.value), 0)
+  if (!max) return <EmptyState compact title="لا توجد بيانات للرسم" description="ستظهر الأعمدة عند توفر بيانات كافية." />
+  return (
+    <div className="bar-chart">
+      {data.map((item) => (
+        <div className="bar-row" key={item.label}>
+          <span>{item.label}</span>
+          <div><i style={{ width: `${Math.max(8, (item.value / max) * 100)}%` }} /></div>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
     </div>
   )
 }
@@ -222,6 +303,13 @@ function summarizeKpi(rows) {
 function isKpiEligibleRow(row) {
   if (['pending', 'cancelled'].includes(row.status)) return false
   return row.status === 'done' || Number(row.elapsed_seconds) > 0 || row.is_late || row.is_overdue
+}
+
+function isFinishedEarly(row) {
+  return row.status === 'done'
+    && Number(row.elapsed_seconds) > 0
+    && Number(row.expected_minutes) > 0
+    && Number(row.elapsed_seconds) < Number(row.expected_minutes) * 60
 }
 
 function attributableDelayForRow(row) {
