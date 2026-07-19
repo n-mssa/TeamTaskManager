@@ -42,13 +42,38 @@ def scoped_tasks(db: Session, current_user: User, department_id: int | None = No
     return query
 
 
+def delay_hours_for_task(task: Task):
+    actual_hours = (task.elapsed_seconds or 0) / 3600
+    expected_hours = (task.expected_minutes or 0) / 60
+    return max(actual_hours - expected_hours, 0)
+
+
+def attributable_delay_hours_for_task(task: Task):
+    delay_hours = delay_hours_for_task(task)
+    if delay_hours <= 0:
+        return 0
+    if not task.overrun_reason_text:
+        return delay_hours
+    category = getattr(task.overrun_reason_category, "value", task.overrun_reason_category) or "on_employee"
+    if not task.overrun_reason_approved:
+        return delay_hours
+    return delay_hours * DELAY_CATEGORY_COEFFICIENTS.get(category, 1.0)
+
+
+def is_kpi_eligible(task: Task):
+    if task.status in {TaskStatus.pending, TaskStatus.cancelled}:
+        return False
+    return task.status == TaskStatus.done or (task.elapsed_seconds or 0) > 0 or task.is_over_expected
+
+
 def task_row(task: Task):
     over_expected = task.is_over_expected
     actual_hours = (task.elapsed_seconds or 0) / 3600
     expected_hours = (task.expected_minutes or 0) / 60
-    delay_hours = max(actual_hours - expected_hours, 0)
+    delay_hours = delay_hours_for_task(task)
     category = getattr(task.overrun_reason_category, "value", task.overrun_reason_category) or "on_employee"
-    attributable_delay_hours = delay_hours * DELAY_CATEGORY_COEFFICIENTS.get(category, 1.0) if task.overrun_reason_approved else 0
+    attributable_delay_hours = attributable_delay_hours_for_task(task)
+
     return {
         "id": task.id,
         "title": task.title,
@@ -81,26 +106,22 @@ def task_row(task: Task):
 
 
 def kpi_summary(tasks: list[Task]):
-    completed_tasks = [task for task in tasks if task.status == TaskStatus.done]
-    total_estimated_hours = sum((task.expected_minutes or 0) / 60 for task in completed_tasks)
-    total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 for task in completed_tasks)
-    total_delay_hours = sum(max(((task.elapsed_seconds or 0) / 3600) - ((task.expected_minutes or 0) / 60), 0) for task in completed_tasks)
-    attributable_delay_hours = 0.0
-    for task in completed_tasks:
-        delay_hours = max(((task.elapsed_seconds or 0) / 3600) - ((task.expected_minutes or 0) / 60), 0)
-        category = getattr(task.overrun_reason_category, "value", task.overrun_reason_category) or "on_employee"
-        if task.overrun_reason_approved:
-            attributable_delay_hours += delay_hours * DELAY_CATEGORY_COEFFICIENTS.get(category, 1.0)
-    delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else 0
+    kpi_tasks = [task for task in tasks if is_kpi_eligible(task)]
+    total_estimated_hours = sum((task.expected_minutes or 0) / 60 for task in kpi_tasks)
+    total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 for task in kpi_tasks)
+    total_delay_hours = sum(delay_hours_for_task(task) for task in kpi_tasks)
+    attributable_delay_hours = sum(attributable_delay_hours_for_task(task) for task in kpi_tasks)
+    delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else None
     return {
-        "completed_tasks": len(completed_tasks),
+        "evaluated_tasks": len(kpi_tasks),
+        "completed_tasks": sum(1 for task in kpi_tasks if task.status == TaskStatus.done),
         "total_estimated_hours": round(total_estimated_hours, 2),
         "total_actual_hours": round(total_actual_hours, 2),
-        "overdue_tasks": sum(1 for task in completed_tasks if task.is_over_expected),
+        "overdue_tasks": sum(1 for task in kpi_tasks if task.is_over_expected),
         "total_delay_hours": round(total_delay_hours, 2),
         "attributable_delay_hours": round(attributable_delay_hours, 2),
-        "delay_rate": round(delay_rate, 2),
-        "commitment_rate": round(max(0, 100 - delay_rate), 2),
+        "delay_rate": round(delay_rate, 2) if delay_rate is not None else None,
+        "commitment_rate": round(max(0, 100 - delay_rate), 2) if delay_rate is not None else None,
     }
 
 
@@ -145,6 +166,8 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
         .all()
     )
 
+    kpi_tasks_by_id = {task.id: task for task in [*completed, *pending_work, *delayed]}
+
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -158,7 +181,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
             "completed_late": len(completed_late),
             "expected_minutes": sum(task.expected_minutes for task in all_tasks),
         },
-        "kpi": kpi_summary(completed),
+        "kpi": kpi_summary(list(kpi_tasks_by_id.values())),
         "completed_tasks": [task_row(task) for task in completed],
         "pending_in_progress_tasks": [task_row(task) for task in pending_work],
         "delayed_tasks": [task_row(task) for task in delayed],
