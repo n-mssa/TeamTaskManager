@@ -25,6 +25,7 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
   const [endOfDayPrompt, setEndOfDayPrompt] = useState(null)
+  const [expectedTimeReview, setExpectedTimeReview] = useState(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -164,10 +165,65 @@ export default function App() {
   }
 
   async function openNotification(notification) {
+    if (notification.notification_type === 'expected_time_complaint' && notification.task_id) {
+      try {
+        const task = await api(`/tasks/${notification.task_id}`)
+        setExpectedTimeReview({
+          notification,
+          task,
+          adjustedMinutes: Math.max(task.expected_minutes || 1, Math.ceil((task.elapsed_seconds || 0) / 60)),
+          saving: false,
+          error: '',
+        })
+        setNotificationsOpen(false)
+        setToast(null)
+      } catch (err) {
+        await markNotificationRead(notification)
+        openTask(notification.task_id)
+        setNotificationsOpen(false)
+        setToast(null)
+      }
+      return
+    }
     await markNotificationRead(notification)
     if (notification.task_id) openTask(notification.task_id)
     setNotificationsOpen(false)
     setToast(null)
+  }
+
+  async function acceptExpectedTimeReview() {
+    if (!expectedTimeReview) return
+    const adjustedMinutes = Number(expectedTimeReview.adjustedMinutes)
+    if (!Number.isFinite(adjustedMinutes) || adjustedMinutes < 1) {
+      setExpectedTimeReview((current) => current ? { ...current, error: 'يرجى إدخال وقت متوقع صحيح.' } : current)
+      return
+    }
+    setExpectedTimeReview((current) => current ? { ...current, saving: true, error: '' } : current)
+    try {
+      await api(`/tasks/${expectedTimeReview.task.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ expected_minutes: Math.round(adjustedMinutes) }),
+      })
+      await markNotificationRead(expectedTimeReview.notification)
+      window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+      setExpectedTimeReview(null)
+    } catch (err) {
+      setExpectedTimeReview((current) => current ? { ...current, saving: false, error: err.message } : current)
+    }
+  }
+
+  async function denyExpectedTimeReview() {
+    if (!expectedTimeReview) return
+    await markNotificationRead(expectedTimeReview.notification)
+    setExpectedTimeReview(null)
+  }
+
+  async function openExpectedTimeReviewDetails() {
+    if (!expectedTimeReview) return
+    const { notification, task } = expectedTimeReview
+    await markNotificationRead(notification)
+    setExpectedTimeReview(null)
+    openTask(task.id)
   }
 
   async function enableBrowserNotifications() {
@@ -307,6 +363,16 @@ export default function App() {
           onDismiss={() => setEndOfDayPrompt(null)}
         />
       )}
+      {expectedTimeReview && (
+        <ExpectedTimeReviewModal
+          review={expectedTimeReview}
+          onChangeMinutes={(value) => setExpectedTimeReview((current) => current ? { ...current, adjustedMinutes: value, error: '' } : current)}
+          onAccept={acceptExpectedTimeReview}
+          onDeny={denyExpectedTimeReview}
+          onDetails={openExpectedTimeReviewDetails}
+          onClose={() => setExpectedTimeReview(null)}
+        />
+      )}
     </div>
   )
 }
@@ -385,6 +451,71 @@ function EndOfDayPrompt({ taskCount, onConfirm, onDismiss }) {
   )
 }
 
+function ExpectedTimeReviewModal({ review, onChangeMinutes, onAccept, onDeny, onDetails, onClose }) {
+  const { task, adjustedMinutes, saving, error } = review
+  const actualMinutes = Math.ceil((task.elapsed_seconds || 0) / 60)
+  const overBySeconds = Math.max((task.elapsed_seconds || 0) - ((task.expected_minutes || 0) * 60), 0)
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="briefing-modal expected-time-review-modal" role="dialog" aria-modal="true" aria-labelledby="expected-time-review-title" onClick={(event) => event.stopPropagation()}>
+        <header className="briefing-head">
+          <div>
+            <p className="eyebrow">اعتراض على الوقت المتوقع</p>
+            <h2 id="expected-time-review-title">مراجعة وقت المهمة</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} title="إغلاق" aria-label="إغلاق"><X size={18} /></button>
+        </header>
+
+        <div className="expected-review-body">
+          <div>
+            <span>المهمة</span>
+            <strong>{task.title}</strong>
+          </div>
+          <div>
+            <span>المكلف</span>
+            <strong>{task.assignee?.full_name_ar || 'غير محدد'}</strong>
+          </div>
+          <div>
+            <span>الوقت المتوقع الحالي</span>
+            <strong>{formatMinutes(task.expected_minutes || 0)}</strong>
+          </div>
+          <div>
+            <span>الوقت الفعلي</span>
+            <strong>{formatDuration(task.elapsed_seconds || 0)}</strong>
+          </div>
+          <div>
+            <span>مدة التجاوز</span>
+            <strong>{overBySeconds ? formatDuration(overBySeconds) : 'لا يوجد'}</strong>
+          </div>
+        </div>
+
+        <article className="expected-review-reason">
+          <span>سبب الموظف</span>
+          <p>{task.expected_time_complaint_text || 'لا يوجد سبب مكتوب.'}</p>
+        </article>
+
+        <label className="expected-review-input">تعديل الوقت المتوقع بالدقائق
+          <input
+            type="number"
+            min="1"
+            value={adjustedMinutes}
+            onChange={(event) => onChangeMinutes(event.target.value)}
+          />
+          <small>اقتراح تلقائي حسب الوقت الفعلي: {actualMinutes} دقيقة</small>
+        </label>
+
+        {error && <p className="error">{error}</p>}
+        <footer className="briefing-actions">
+          <button type="button" onClick={onDetails} disabled={saving}>عرض التفاصيل</button>
+          <button type="button" onClick={onDeny} disabled={saving}>رفض الاعتراض</button>
+          <button className="primary" type="button" onClick={onAccept} disabled={saving}>{saving ? 'جاري الحفظ...' : 'قبول وتعديل الوقت'}</button>
+        </footer>
+      </section>
+    </div>
+  )
+}
+
 function BrowserNotificationPrompt({ permission, onEnable }) {
   if (permission === 'granted' || permission === 'unsupported') return null
   if (permission === 'denied') {
@@ -413,6 +544,15 @@ function formatNotificationTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function formatMinutes(minutes) {
+  const totalMinutes = Math.max(0, Number(minutes) || 0)
+  const hours = Math.floor(totalMinutes / 60)
+  const rest = totalMinutes % 60
+  if (hours && rest) return `${hours}س ${rest}د`
+  if (hours) return `${hours}س`
+  return `${rest}د`
 }
 
 function getBrowserNotificationPermission() {
