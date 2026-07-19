@@ -170,7 +170,8 @@ function ReviewTable({ rows, onOpenTask }) {
                 <th>المهمة</th>
                 <th>المكلف</th>
                 <th>تجاوزت الوقت؟</th>
-                <th>مدة التجاوز</th>
+                <th>الوقت المتوقع</th>
+                <th>الوقت الفعلي</th>
                 <th>سبب تجاوز الوقت</th>
                 <th>اعتماد السبب</th>
                 <th>اعتراض الوقت</th>
@@ -196,7 +197,8 @@ function ReviewTable({ rows, onOpenTask }) {
                   <td>{row.title}</td>
                   <td>{row.assignee}</td>
                   <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
-                  <td>{formatOverrun(row)}</td>
+                  <td>{formatMinutes(row.expected_minutes)}</td>
+                  <td>{formatSeconds(row.elapsed_seconds)}</td>
                   <td>{row.overrun_reason_text || '-'}</td>
                   <td>{row.overrun_reason_text ? (row.overrun_reason_approved ? 'معتمد' : 'بانتظار المراجعة') : '-'}</td>
                   <td>{row.expected_time_complaint_text || '-'}</td>
@@ -276,10 +278,14 @@ function isFinishedEarly(row) {
     && Number(row.elapsed_seconds) < Number(row.expected_minutes) * 60
 }
 
-function formatOverrun(row) {
-  const delayHours = Number(row.delay_hours) || 0
-  if (delayHours <= 0) return '-'
-  const totalMinutes = Math.round(delayHours * 60)
+function formatSeconds(seconds) {
+  const totalMinutes = Math.round((Number(seconds) || 0) / 60)
+  return formatMinutes(totalMinutes)
+}
+
+function formatMinutes(value) {
+  const totalMinutes = Math.round(Number(value) || 0)
+  if (totalMinutes <= 0) return '-'
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
   if (hours && minutes) return `${hours}س ${minutes}د`
