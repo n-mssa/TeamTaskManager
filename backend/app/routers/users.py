@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, hash_password
 from ..database import get_db
-from ..models import User
+from ..models import Task, User
 from ..permissions import require_admin
 from ..schemas import PasswordReset, ThemePreference, UserCreate, UserOut, UserUpdate
 
@@ -65,8 +65,15 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
     if user_id == current_user.id and (data.get("role") not in {None, current_user.role} or data.get("is_active") is False):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot remove your own admin access")
+    department_changed = "department_id" in data and data["department_id"] != user.department_id
     for key, value in data.items():
         setattr(user, key, value)
+    if department_changed and user.department_id:
+        (
+            db.query(Task)
+            .filter(Task.assigned_to_user_id == user.id, Task.deleted_at.is_(None))
+            .update({Task.department_id: user.department_id}, synchronize_session=False)
+        )
     db.commit()
     db.refresh(user)
     return user
