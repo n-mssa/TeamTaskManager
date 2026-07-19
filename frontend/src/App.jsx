@@ -338,7 +338,7 @@ export default function App() {
           {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => setRoute(defaultRoute(user.role))} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
-          {route === 'kpi' && <Kpi user={user} />}
+          {route === 'kpi' && <Kpi user={user} openTask={openTask} />}
           {route === 'users' && <Users />}
           {route === 'departments' && <Departments />}
           {route === 'delay-reasons' && <DelayReasons />}

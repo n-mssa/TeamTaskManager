@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import EmptyState from '../components/EmptyState'
 
-export default function Kpi({ user }) {
+export default function Kpi({ user, openTask }) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [userId, setUserId] = useState('')
@@ -64,7 +64,7 @@ export default function Kpi({ user }) {
       {error && <p className="error">{error}</p>}
       <KpiPanel kpi={displayedReport.kpi} />
       <KpiBreakdown rows={kpiRows} />
-      <ReviewTable rows={reviewRows} />
+      <ReviewTable rows={reviewRows} onOpenTask={openTask} />
     </section>
   )
 }
@@ -117,7 +117,7 @@ function KpiBreakdown({ rows }) {
   )
 }
 
-function ReviewTable({ rows }) {
+function ReviewTable({ rows, onOpenTask }) {
   return (
     <article className="panel">
       <h2>مراجعات تؤثر على KPI<small>{rows.length} مهمة</small></h2>
@@ -136,7 +136,20 @@ function ReviewTable({ rows }) {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`kpi-${row.id}`}>
+                <tr
+                  key={`kpi-${row.id}`}
+                  className={onOpenTask ? 'clickable-row' : ''}
+                  onClick={() => onOpenTask?.(row.id)}
+                  tabIndex={onOpenTask ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (!onOpenTask) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onOpenTask(row.id)
+                    }
+                  }}
+                  title={onOpenTask ? 'فتح تفاصيل المهمة' : undefined}
+                >
                   <td>{row.title}</td>
                   <td>{row.assignee}</td>
                   <td>{row.overrun_reason_text || '-'}</td>
@@ -191,7 +204,8 @@ function summarizeKpi(rows) {
   const totalActualHours = kpiRows.reduce((total, row) => total + (Number(row.actual_hours) || 0), 0)
   const totalDelayHours = kpiRows.reduce((total, row) => total + (Number(row.delay_hours) || 0), 0)
   const attributableDelayHours = kpiRows.reduce((total, row) => total + attributableDelayForRow(row), 0)
-  const delayRate = totalEstimatedHours ? (attributableDelayHours / totalEstimatedHours) * 100 : null
+  const rawDelayRate = totalEstimatedHours ? (attributableDelayHours / totalEstimatedHours) * 100 : null
+  const delayRate = rawDelayRate === null ? null : Math.min(rawDelayRate, 100)
   return {
     evaluated_tasks: kpiRows.length,
     completed_tasks: kpiRows.filter((row) => row.status === 'done').length,

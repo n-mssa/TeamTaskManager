@@ -111,7 +111,8 @@ def kpi_summary(tasks: list[Task]):
     total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 for task in kpi_tasks)
     total_delay_hours = sum(delay_hours_for_task(task) for task in kpi_tasks)
     attributable_delay_hours = sum(attributable_delay_hours_for_task(task) for task in kpi_tasks)
-    delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else None
+    raw_delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else None
+    delay_rate = min(raw_delay_rate, 100) if raw_delay_rate is not None else None
     return {
         "evaluated_tasks": len(kpi_tasks),
         "completed_tasks": sum(1 for task in kpi_tasks if task.status == TaskStatus.done),
