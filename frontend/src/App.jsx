@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import MyTasks from './pages/MyTasks'
 import Dashboard from './pages/Dashboard'
 import Reports from './pages/Reports'
+import Kpi from './pages/Kpi'
 import Users from './pages/Users'
 import Departments from './pages/Departments'
 import DelayReasons from './pages/DelayReasons'
@@ -281,6 +282,7 @@ export default function App() {
           {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => setRoute(defaultRoute(user.role))} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
           {route === 'reports' && <Reports user={user} />}
+          {route === 'kpi' && <Kpi user={user} />}
           {route === 'users' && <Users />}
           {route === 'departments' && <Departments />}
           {route === 'delay-reasons' && <DelayReasons />}
@@ -431,6 +433,7 @@ function routeTitle(route) {
     'task-form': 'إدارة المهمة',
     'task-details': 'تفاصيل المهمة',
     reports: 'التقارير',
+    kpi: 'مؤشرات الأداء (KPI)',
     users: 'المستخدمون',
     departments: 'الأقسام',
     'delay-reasons': 'أسباب التأخير',
@@ -556,12 +559,14 @@ function buildNav(role) {
       { route: 'dashboard', label: 'لوحة القسم', icon: ClipboardList },
       { route: 'task-form', label: 'إنشاء مهمة', icon: Plus },
       { route: 'reports', label: 'التقارير', icon: BarChart3 },
+      { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
     ]
   }
   return [
     { route: 'admin-dashboard', label: 'لوحة الإدارة', icon: ClipboardList },
     { route: 'task-form', label: 'إنشاء مهمة', icon: Plus },
     { route: 'reports', label: 'التقارير', icon: BarChart3 },
+    { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
     { route: 'users', label: 'المستخدمون', icon: UsersIcon },
     { route: 'departments', label: 'الأقسام', icon: Building2 },
     { route: 'delay-reasons', label: 'أسباب التأخير', icon: BarChart3 },

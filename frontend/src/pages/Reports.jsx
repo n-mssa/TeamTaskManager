@@ -73,7 +73,6 @@ export default function Reports({ user }) {
       <div className="stats">
         {Object.entries(displayedReport.summary).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{summaryLabels[key] || key}</span></div>)}
       </div>
-      <KpiPanel kpi={displayedReport.kpi} />
       <ReportCharts report={displayedReport} />
       <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} />
       <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} />
@@ -95,7 +94,6 @@ function filterReportByUser(report, userId) {
   const delayedTasks = (report.delayed_tasks || []).filter(belongsToSelected)
   const visibleRows = [...completedTasks, ...pendingInProgressTasks, ...delayedTasks]
   const employeeSummary = summarizeRowsByEmployee(visibleRows)
-  const kpi = summarizeKpi(visibleRows)
 
   return {
     ...report,
@@ -103,7 +101,6 @@ function filterReportByUser(report, userId) {
     pending_in_progress_tasks: pendingInProgressTasks,
     delayed_tasks: delayedTasks,
     by_employee: employeeSummary,
-    kpi,
     summary: {
       ...report.summary,
       completed_this_week: completedTasks.length,
@@ -114,32 +111,6 @@ function filterReportByUser(report, userId) {
       expected_minutes: visibleRows.reduce((total, row) => total + (Number(row.expected_minutes) || 0), 0),
     },
   }
-}
-
-function KpiPanel({ kpi }) {
-  if (!kpi) return null
-  const hasValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
-  const formatPercent = (value) => hasValue(value) ? `${value}%` : 'غير متوفر'
-  const formatNumber = (value) => hasValue(value) ? value : '-'
-  return (
-    <article className="panel kpi-panel">
-      <div className="panel-title-with-help">
-        <h2>مؤشر الالتزام بالوقت</h2>
-        <span className="help-tooltip" tabIndex="0" aria-label="طريقة احتساب مؤشر الالتزام">
-          ?
-          <span className="help-tooltip-content" role="tooltip">
-            المعادلة: نسبة الالتزام = 100 - ((ساعات التأخير المحتسبة ÷ ساعات الوقت المتوقع) × 100)
-          </span>
-        </span>
-      </div>
-      <div className="kpi-grid">
-        <div><strong>{formatPercent(kpi.commitment_rate)}</strong><span>نسبة الالتزام</span></div>
-        <div><strong>{formatPercent(kpi.delay_rate)}</strong><span>نسبة التأخير المحتسبة</span></div>
-        <div><strong>{formatNumber(kpi.attributable_delay_hours)}</strong><span>ساعات التأخير المحتسبة</span></div>
-        <div><strong>{formatNumber(kpi.total_estimated_hours)}</strong><span>ساعات الوقت المتوقع</span></div>
-      </div>
-    </article>
-  )
 }
 
 function ReportCharts({ report }) {
@@ -223,40 +194,6 @@ function summarizeRowsByEmployee(rows) {
     grouped.set(row.assignee, current)
   })
   return Array.from(grouped.values())
-}
-
-function summarizeKpi(completedRows) {
-  const kpiRows = completedRows.filter(isKpiEligibleRow)
-  const totalEstimatedHours = kpiRows.reduce((total, row) => total + ((Number(row.expected_minutes) || 0) / 60), 0)
-  const totalActualHours = kpiRows.reduce((total, row) => total + (Number(row.actual_hours) || 0), 0)
-  const totalDelayHours = kpiRows.reduce((total, row) => total + (Number(row.delay_hours) || 0), 0)
-  const attributableDelayHours = kpiRows.reduce((total, row) => total + attributableDelayForRow(row), 0)
-  const delayRate = totalEstimatedHours ? (attributableDelayHours / totalEstimatedHours) * 100 : null
-  return {
-    evaluated_tasks: kpiRows.length,
-    completed_tasks: kpiRows.filter((row) => row.status === 'done').length,
-    total_estimated_hours: Number(totalEstimatedHours.toFixed(2)),
-    total_actual_hours: Number(totalActualHours.toFixed(2)),
-    overdue_tasks: kpiRows.filter((row) => row.is_late || row.is_overdue).length,
-    total_delay_hours: Number(totalDelayHours.toFixed(2)),
-    attributable_delay_hours: Number(attributableDelayHours.toFixed(2)),
-    delay_rate: delayRate === null ? null : Number(delayRate.toFixed(2)),
-    commitment_rate: delayRate === null ? null : Number(Math.max(0, 100 - delayRate).toFixed(2)),
-  }
-}
-
-function isKpiEligibleRow(row) {
-  if (['pending', 'cancelled'].includes(row.status)) return false
-  return row.status === 'done' || Number(row.elapsed_seconds) > 0 || row.is_late || row.is_overdue
-}
-
-function attributableDelayForRow(row) {
-  const delayHours = Number(row.delay_hours) || 0
-  if (delayHours <= 0) return 0
-  if (!row.overrun_reason_text) return delayHours
-  if (!row.overrun_reason_approved) return delayHours
-  const coefficients = { on_employee: 1, shared: 0.5, external: 0 }
-  return delayHours * (coefficients[row.overrun_reason_category] ?? 1)
 }
 
 function ReportTable({ title, rows }) {
