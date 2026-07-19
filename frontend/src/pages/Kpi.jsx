@@ -169,6 +169,8 @@ function ReviewTable({ rows, onOpenTask }) {
               <tr>
                 <th>المهمة</th>
                 <th>المكلف</th>
+                <th>تجاوزت الوقت؟</th>
+                <th>مدة التجاوز</th>
                 <th>سبب تجاوز الوقت</th>
                 <th>اعتماد السبب</th>
                 <th>اعتراض الوقت</th>
@@ -193,6 +195,8 @@ function ReviewTable({ rows, onOpenTask }) {
                 >
                   <td>{row.title}</td>
                   <td>{row.assignee}</td>
+                  <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
+                  <td>{formatOverrun(row)}</td>
                   <td>{row.overrun_reason_text || '-'}</td>
                   <td>{row.overrun_reason_text ? (row.overrun_reason_approved ? 'معتمد' : 'بانتظار المراجعة') : '-'}</td>
                   <td>{row.expected_time_complaint_text || '-'}</td>
@@ -270,6 +274,17 @@ function isFinishedEarly(row) {
     && Number(row.elapsed_seconds) > 0
     && Number(row.expected_minutes) > 0
     && Number(row.elapsed_seconds) < Number(row.expected_minutes) * 60
+}
+
+function formatOverrun(row) {
+  const delayHours = Number(row.delay_hours) || 0
+  if (delayHours <= 0) return '-'
+  const totalMinutes = Math.round(delayHours * 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours && minutes) return `${hours}س ${minutes}د`
+  if (hours) return `${hours}س`
+  return `${minutes}د`
 }
 
 function attributableDelayForRow(row) {
