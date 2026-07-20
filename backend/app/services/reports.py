@@ -43,9 +43,19 @@ def scoped_tasks(db: Session, current_user: User, department_id: int | None = No
 
 
 def delay_hours_for_task(task: Task):
+    if is_expected_time_complaint_accepted(task):
+        return 0
     actual_hours = (task.elapsed_seconds or 0) / 3600
     expected_hours = (task.expected_minutes or 0) / 60
     return max(actual_hours - expected_hours, 0)
+
+
+def is_expected_time_complaint_accepted(task: Task):
+    return getattr(task, "expected_time_complaint_status", None) == "accepted"
+
+
+def is_effectively_over_expected(task: Task):
+    return task.is_over_expected and not is_expected_time_complaint_accepted(task)
 
 
 def attributable_delay_hours_for_task(task: Task):
@@ -67,7 +77,7 @@ def is_kpi_eligible(task: Task):
 
 
 def task_row(task: Task):
-    over_expected = task.is_over_expected
+    over_expected = is_effectively_over_expected(task)
     actual_hours = (task.elapsed_seconds or 0) / 3600
     expected_hours = (task.expected_minutes or 0) / 60
     delay_hours = delay_hours_for_task(task)
@@ -99,6 +109,7 @@ def task_row(task: Task):
         "overrun_reason_approved": task.overrun_reason_approved,
         "expected_time_complaint_text": task.expected_time_complaint_text,
         "expected_time_complaint_at": task.expected_time_complaint_at.isoformat() if task.expected_time_complaint_at else None,
+        "expected_time_complaint_status": task.expected_time_complaint_status,
         "production_issue_flagged": task.production_issue_flagged,
         "production_issue_reason": task.production_issue_reason,
         "production_issue_flagged_at": task.production_issue_flagged_at.isoformat() if task.production_issue_flagged_at else None,
@@ -118,7 +129,7 @@ def kpi_summary(tasks: list[Task]):
         "completed_tasks": sum(1 for task in kpi_tasks if task.status == TaskStatus.done),
         "total_estimated_hours": round(total_estimated_hours, 2),
         "total_actual_hours": round(total_actual_hours, 2),
-        "overdue_tasks": sum(1 for task in kpi_tasks if task.is_over_expected),
+        "overdue_tasks": sum(1 for task in kpi_tasks if is_effectively_over_expected(task)),
         "total_delay_hours": round(total_delay_hours, 2),
         "attributable_delay_hours": round(attributable_delay_hours, 2),
         "delay_rate": round(delay_rate, 2) if delay_rate is not None else None,
@@ -134,10 +145,10 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     delayed = [
         task
         for task in all_tasks
-        if task.status == TaskStatus.delayed or (task.is_over_expected and task.status not in {TaskStatus.done, TaskStatus.cancelled})
+        if task.status == TaskStatus.delayed or (is_effectively_over_expected(task) and task.status not in {TaskStatus.done, TaskStatus.cancelled})
     ]
     pending_work = [task for task in all_tasks if task.status in {TaskStatus.pending, TaskStatus.in_progress}]
-    completed_late = [task for task in all_tasks if task.status == TaskStatus.done and task.is_over_expected]
+    completed_late = [task for task in all_tasks if task.status == TaskStatus.done and is_effectively_over_expected(task)]
     created_week = [task for task in all_tasks if start_date <= task.created_at.date() <= end_date]
 
     by_department = (

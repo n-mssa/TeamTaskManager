@@ -149,6 +149,11 @@ class DelayReviewUpdate(BaseModel):
     overrun_reason_approved: bool = True
 
 
+class ExpectedTimeReviewUpdate(BaseModel):
+    approved: bool = True
+    expected_minutes: Optional[int] = Field(default=None, gt=0)
+
+
 class ProductionIssueUpdate(BaseModel):
     flagged: bool = True
     reason: Optional[str] = None
@@ -183,6 +188,7 @@ class TaskOut(TaskBase):
     overrun_reason_approved: bool = False
     expected_time_complaint_text: Optional[str] = None
     expected_time_complaint_at: Optional[datetime] = None
+    expected_time_complaint_status: str = "none"
     production_issue_flagged: bool = False
     production_issue_reason: Optional[str] = None
     production_issue_flagged_by_user_id: Optional[int] = None

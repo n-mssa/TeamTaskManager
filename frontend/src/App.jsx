@@ -235,9 +235,9 @@ export default function App() {
     }
     setExpectedTimeReview((current) => current ? { ...current, saving: true, error: '' } : current)
     try {
-      await api(`/tasks/${expectedTimeReview.task.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ expected_minutes: Math.round(adjustedMinutes) }),
+      await api(`/tasks/${expectedTimeReview.task.id}/expected-time-review`, {
+        method: 'PATCH',
+        body: JSON.stringify({ approved: true, expected_minutes: Math.round(adjustedMinutes) }),
       })
       await markNotificationRead(expectedTimeReview.notification)
       window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
@@ -249,8 +249,18 @@ export default function App() {
 
   async function denyExpectedTimeReview() {
     if (!expectedTimeReview) return
-    await markNotificationRead(expectedTimeReview.notification)
-    setExpectedTimeReview(null)
+    setExpectedTimeReview((current) => current ? { ...current, saving: true, error: '' } : current)
+    try {
+      await api(`/tasks/${expectedTimeReview.task.id}/expected-time-review`, {
+        method: 'PATCH',
+        body: JSON.stringify({ approved: false }),
+      })
+      await markNotificationRead(expectedTimeReview.notification)
+      window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+      setExpectedTimeReview(null)
+    } catch (err) {
+      setExpectedTimeReview((current) => current ? { ...current, saving: false, error: err.message } : current)
+    }
   }
 
   async function openExpectedTimeReviewDetails() {

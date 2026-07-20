@@ -15,6 +15,13 @@ const delayCategoryLabels = {
   external: 'سبب خارجي',
 }
 
+const expectedTimeComplaintStatusLabels = {
+  pending: 'بانتظار المراجعة',
+  accepted: 'تم قبول الاعتراض',
+  denied: 'تم رفض الاعتراض',
+  none: 'غير مراجع',
+}
+
 export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [task, setTask] = useState(null)
   const [comments, setComments] = useState([])
@@ -173,6 +180,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <article className="panel">
           <h2>اعتراض على الوقت المتوقع</h2>
           <p>{task.expected_time_complaint_text}</p>
+          <p className="note">الحالة: {expectedTimeComplaintStatusLabels[task.expected_time_complaint_status] || expectedTimeComplaintStatusLabels.pending}</p>
           <small>{task.expected_time_complaint_at || ''}</small>
         </article>
       )}

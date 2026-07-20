@@ -106,6 +106,7 @@ class Task(Base):
     overrun_reason_approved = Column(Boolean, default=False, nullable=False)
     expected_time_complaint_text = Column(Text, nullable=True)
     expected_time_complaint_at = Column(DateTime(timezone=True), nullable=True)
+    expected_time_complaint_status = Column(String(32), nullable=False, default="none")
     production_issue_flagged = Column(Boolean, default=False, nullable=False)
     production_issue_reason = Column(Text, nullable=True)
     production_issue_flagged_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

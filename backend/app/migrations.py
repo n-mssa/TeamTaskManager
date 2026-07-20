@@ -12,6 +12,7 @@ TASK_COLUMNS = {
     "overrun_reason_approved": "BOOLEAN NOT NULL DEFAULT FALSE",
     "expected_time_complaint_text": "TEXT",
     "expected_time_complaint_at": "TIMESTAMP WITH TIME ZONE",
+    "expected_time_complaint_status": "VARCHAR(32) NOT NULL DEFAULT 'none'",
     "production_issue_flagged": "BOOLEAN NOT NULL DEFAULT FALSE",
     "production_issue_reason": "TEXT",
     "production_issue_flagged_by_user_id": "INTEGER REFERENCES users(id)",
@@ -55,6 +56,14 @@ def apply_migrations():
                 "SET status = 'blocked', "
                 "hold_reason_text = COALESCE(hold_reason_text, delay_reason_text, 'Moved from late bucket') "
                 "WHERE status = 'delayed'"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE tasks "
+                "SET expected_time_complaint_status = 'pending' "
+                "WHERE expected_time_complaint_text IS NOT NULL "
+                "AND expected_time_complaint_status = 'none'"
             )
         )
         connection.execute(text("ALTER TABLE task_status_history ADD COLUMN IF NOT EXISTS reason_text TEXT"))

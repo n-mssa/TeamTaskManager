@@ -102,7 +102,7 @@ function KpiBreakdown({ rows }) {
     current.evaluated += 1
     if (row.status === 'done') current.done += 1
     if (isFinishedEarly(row)) current.early += 1
-    if (row.is_late || row.is_overdue) current.overrun += 1
+    if (isEffectivelyOverrun(row)) current.overrun += 1
     if (row.overrun_reason_text && !row.overrun_reason_approved) current.unreviewed += 1
     if (row.production_issue_flagged) current.productionFlags += 1
     return current
@@ -124,8 +124,8 @@ function KpiCharts({ report, rows }) {
   const delayData = (report.delay_reasons || []).slice(0, 6).map((item) => ({ label: item.reason, value: item.count || 0 })).filter((item) => item.value > 0)
   const timingData = [
     { label: 'قبل الوقت المتوقع', value: rows.filter(isFinishedEarly).length },
-    { label: 'ضمن الوقت', value: rows.filter((row) => row.status === 'done' && !isFinishedEarly(row) && !(row.is_late || row.is_overdue)).length },
-    { label: 'تجاوزت الوقت', value: rows.filter((row) => row.is_late || row.is_overdue).length },
+    { label: 'ضمن الوقت', value: rows.filter((row) => row.status === 'done' && !isFinishedEarly(row) && !isEffectivelyOverrun(row)).length },
+    { label: 'تجاوزت الوقت', value: rows.filter(isEffectivelyOverrun).length },
   ].filter((item) => item.value > 0)
 
   return (
@@ -196,7 +196,7 @@ function ReviewTable({ rows, onOpenTask }) {
                 >
                   <td>{row.title}</td>
                   <td>{row.assignee}</td>
-                  <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
+                  <td>{isEffectivelyOverrun(row) ? 'نعم' : 'لا'}</td>
                   <td>{formatMinutes(row.expected_minutes)}</td>
                   <td>{formatSeconds(row.elapsed_seconds)}</td>
                   <td>{row.overrun_reason_text || '-'}</td>
@@ -258,7 +258,7 @@ function summarizeKpi(rows) {
     completed_tasks: kpiRows.filter((row) => row.status === 'done').length,
     total_estimated_hours: Number(totalEstimatedHours.toFixed(2)),
     total_actual_hours: Number(totalActualHours.toFixed(2)),
-    overdue_tasks: kpiRows.filter((row) => row.is_late || row.is_overdue).length,
+    overdue_tasks: kpiRows.filter(isEffectivelyOverrun).length,
     total_delay_hours: Number(totalDelayHours.toFixed(2)),
     attributable_delay_hours: Number(attributableDelayHours.toFixed(2)),
     delay_rate: delayRate === null ? null : Number(delayRate.toFixed(2)),
@@ -278,6 +278,10 @@ function isFinishedEarly(row) {
     && Number(row.elapsed_seconds) < Number(row.expected_minutes) * 60
 }
 
+function isEffectivelyOverrun(row) {
+  return (row.is_late || row.is_overdue) && row.expected_time_complaint_status !== 'accepted'
+}
+
 function formatSeconds(seconds) {
   const totalMinutes = Math.round((Number(seconds) || 0) / 60)
   return formatMinutes(totalMinutes)
@@ -294,6 +298,7 @@ function formatMinutes(value) {
 }
 
 function attributableDelayForRow(row) {
+  if (row.expected_time_complaint_status === 'accepted') return 0
   const delayHours = Number(row.delay_hours) || 0
   if (delayHours <= 0) return 0
   if (!row.overrun_reason_text) return delayHours

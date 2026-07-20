@@ -12,7 +12,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
-from ..schemas import CommentCreate, CommentOut, DelayReviewUpdate, HistoryOut, ProductionIssueUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -158,6 +158,7 @@ def create_task_record(payload: TaskCreate, db: Session, current_user: User):
             "overrun_reason_approved": False,
             "expected_time_complaint_text": None,
             "expected_time_complaint_at": None,
+            "expected_time_complaint_status": "none",
             }
     )
     assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
@@ -363,10 +364,32 @@ def update_status(task_id: int, payload: TaskStatusUpdate, db: Session = Depends
     if payload.status == TaskStatus.done and payload.expected_time_complaint_text and current_user.id == task.assigned_to_user_id:
         task.expected_time_complaint_text = payload.expected_time_complaint_text.strip()
         task.expected_time_complaint_at = datetime.now(timezone.utc)
+        task.expected_time_complaint_status = "pending"
         new_complaint = True
     apply_status_effects(task, old_status, payload.status, current_user, db)
     if new_complaint:
         notify_expected_time_complaint(db, task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/{task_id}/expected-time-review", response_model=TaskOut)
+def review_expected_time(task_id: int, payload: ExpectedTimeReviewUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    if current_user.role not in {UserRole.admin, UserRole.manager}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
+    if not task.expected_time_complaint_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No expected time complaint to review")
+    if payload.approved:
+        elapsed_minutes = max(1, int((task.elapsed_seconds + 59) // 60))
+        requested_minutes = payload.expected_minutes or task.expected_minutes
+        task.expected_minutes = max(requested_minutes, elapsed_minutes)
+        task.expected_time_complaint_status = "accepted"
+        task.overrun_reason_category = DelayReasonCategory.external
+        task.overrun_reason_approved = True
+    else:
+        task.expected_time_complaint_status = "denied"
     db.commit()
     db.refresh(task)
     return task

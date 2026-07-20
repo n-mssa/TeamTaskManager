@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.models import Task, TaskStatus, User
 from app.routers.tasks import apply_status_effects, validate_status_reasons
+from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary
 
 
 class FakeSession:
@@ -66,6 +67,29 @@ class TaskLifecycleTests(unittest.TestCase):
         self.assertGreaterEqual(paused_seconds, 215)
         self.assertEqual(task.work_seconds, paused_seconds)
         self.assertIsNotNone(task.timer_started_at)
+
+    def test_accepted_time_complaint_removes_kpi_delay(self):
+        task = Task(
+            id=1000,
+            title="Accepted complaint",
+            department_id=1,
+            assigned_to_user_id=1,
+            created_by_user_id=1,
+            status=TaskStatus.done,
+            expected_minutes=60,
+            due_date=date.today(),
+            work_seconds=90 * 60,
+            expected_time_complaint_text="Expected time was too low",
+            expected_time_complaint_status="accepted",
+        )
+
+        summary = kpi_summary([task])
+
+        self.assertFalse(is_effectively_over_expected(task))
+        self.assertEqual(delay_hours_for_task(task), 0)
+        self.assertEqual(summary["overdue_tasks"], 0)
+        self.assertEqual(summary["attributable_delay_hours"], 0)
+        self.assertEqual(summary["commitment_rate"], 100)
 
 
 if __name__ == "__main__":
