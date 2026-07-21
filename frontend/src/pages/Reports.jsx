@@ -133,7 +133,7 @@ function ReportCharts({ report }) {
         <h2>توزيع الحالات</h2>
         <PieChart data={statusData} />
       </article>
-      <article className="panel chart-card">
+      <article className="panel chart-card report-chart-print-hidden">
         <h2>المهام حسب الموظف</h2>
         <BarChart data={employeeData} />
       </article>
