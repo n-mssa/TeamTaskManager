@@ -269,5 +269,5 @@ function formatDateTime(value) {
     current[part.type] = part.value
     return current
   }, {})
-  return `${parts.month}/${parts.day}/${parts.year} ${parts.hour}:${parts.minute}`
+  return `${parts.month}/${parts.day}/${String(parts.year).slice(-2)} ${parts.hour}:${parts.minute}`
 }

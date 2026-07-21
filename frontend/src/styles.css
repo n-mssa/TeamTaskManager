@@ -2332,4 +2332,67 @@ tbody tr:hover td {
     gap: 8px;
     font-size: 12px;
   }
+
+  .panel {
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    break-inside: auto;
+  }
+
+  .panel h2 {
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  .table-wrap {
+    border-radius: 10px;
+    overflow: visible;
+  }
+
+  .table-wrap table {
+    min-width: 0;
+    table-layout: fixed;
+    font-size: 10.5px;
+    line-height: 1.55;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  th {
+    font-size: 10px;
+  }
+
+  .table-wrap th:nth-child(1),
+  .table-wrap td:nth-child(1) {
+    width: 33%;
+  }
+
+  .table-wrap th:nth-child(2),
+  .table-wrap td:nth-child(2) {
+    width: 14%;
+  }
+
+  .table-wrap th:nth-child(3),
+  .table-wrap td:nth-child(3),
+  .table-wrap th:nth-child(6),
+  .table-wrap td:nth-child(6),
+  .table-wrap th:nth-child(7),
+  .table-wrap td:nth-child(7) {
+    width: 9%;
+    text-align: center;
+  }
+
+  .table-wrap th:nth-child(4),
+  .table-wrap td:nth-child(4),
+  .table-wrap th:nth-child(5),
+  .table-wrap td:nth-child(5) {
+    width: 13%;
+    text-align: center;
+    white-space: nowrap;
+  }
 }
