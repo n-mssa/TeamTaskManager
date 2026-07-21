@@ -4,8 +4,8 @@ import { statusLabels } from '../utils/labels'
 import EmptyState from '../components/EmptyState'
 
 const summaryLabels = {
-  created_this_week: 'المهام المنشأة هذا الأسبوع',
-  completed_this_week: 'المهام المنجزة هذا الأسبوع',
+  created_this_week: 'المهام المنشأة',
+  completed_this_week: 'المهام المنجزة',
   pending: 'بانتظار التنفيذ',
   in_progress: 'قيد التنفيذ',
   delayed: 'المهام المتأخرة',
@@ -21,6 +21,7 @@ export default function Reports({ user, openTask }) {
   const [report, setReport] = useState(null)
   const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
   const displayedReport = useMemo(() => filterReportByUser(report, userId), [report, userId])
+  const reportRangeTitle = displayedReport ? `تقرير من ${formatDateOnly(displayedReport.start_date)} إلى ${formatDateOnly(displayedReport.end_date)}` : 'التقارير'
 
   async function load() {
     const params = new URLSearchParams()
@@ -42,13 +43,14 @@ export default function Reports({ user, openTask }) {
   function exportCsv() {
     const rows = [...(displayedReport?.completed_tasks || []), ...(displayedReport?.pending_in_progress_tasks || []), ...(displayedReport?.delayed_tasks || [])]
     const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز']
-      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, row.assigned_date || row.due_date, row.completed_at || '', row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)].join(',')))
+      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)].join(',')))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url
     const selectedUser = users.find((item) => String(item.id) === String(userId))
-    link.download = selectedUser ? `weekly-report-${selectedUser.username}.csv` : 'weekly-report.csv'
+    const range = displayedReport ? `${displayedReport.start_date}-to-${displayedReport.end_date}` : 'report'
+    link.download = selectedUser ? `report-${range}-${selectedUser.username}.csv` : `report-${range}.csv`
     link.click()
   }
 
@@ -56,7 +58,7 @@ export default function Reports({ user, openTask }) {
   return (
     <section>
       <div className="page-head">
-        <h1>التقارير الأسبوعية</h1>
+        <h1>{reportRangeTitle}</h1>
         <div className="actions"><button onClick={() => window.print()}>طباعة</button><button onClick={exportCsv}>تصدير CSV</button></div>
       </div>
       <div className="filters">
@@ -222,8 +224,8 @@ function ReportTable({ title, rows, onOpenTask }) {
                 <td>{row.assignee}</td>
                 <td>{row.department}</td>
                 <td>{statusLabels[row.status] || row.status}</td>
-                <td>{row.assigned_date || row.due_date}</td>
-                <td>{row.completed_at || '-'}</td>
+                <td>{formatDateOnly(row.assigned_date || row.due_date)}</td>
+                <td>{formatDateTime(row.completed_at)}</td>
                 <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
                 <td>{formatOverrun(row)}</td>
               </tr>
@@ -244,4 +246,30 @@ function formatOverrun(row) {
   if (hours && minutes) return `${hours}س ${minutes}د`
   if (hours) return `${hours}س`
   return `${minutes}د`
+}
+
+function formatDateOnly(value) {
+  if (!value) return '-'
+  const [year, month, day] = String(value).slice(0, 10).split('-')
+  if (!year || !month || !day) return value
+  return `${month}/${day}/${year}`
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Amman',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date).reduce((current, part) => {
+    current[part.type] = part.value
+    return current
+  }, {})
+  return `${parts.month}/${parts.day}/${parts.year} ${parts.hour}:${parts.minute}`
 }

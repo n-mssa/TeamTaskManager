@@ -736,7 +736,7 @@ function buildNav(role) {
   if (role === 'employee') {
     return [
       { route: 'my-tasks', label: 'مهامي', icon: ClipboardList },
-      { route: 'reports', label: 'تقريري الأسبوعي', icon: BarChart3 },
+      { route: 'reports', label: 'تقريري', icon: BarChart3 },
     ]
   }
   if (role === 'manager') {

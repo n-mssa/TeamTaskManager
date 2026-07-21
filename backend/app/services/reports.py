@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -11,10 +12,17 @@ DELAY_CATEGORY_COEFFICIENTS = {
     "shared": 0.5,
     "external": 0.0,
 }
+REPORT_TIME_ZONE = ZoneInfo("Asia/Amman")
 
 
 def role_value(user: User):
     return getattr(user.role, "value", user.role)
+
+
+def report_local_date(value):
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(REPORT_TIME_ZONE).date()
 
 
 def allowed_report_users_query(db: Session, current_user: User):
@@ -141,7 +149,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     base = scoped_tasks(db, current_user, department_id, user_id)
     all_tasks = base.options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason)).all()
     available_users = allowed_report_users_query(db, current_user).filter(User.is_active.is_(True)).order_by(User.full_name_ar).all()
-    completed = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and start_date <= task.completed_at.date() <= end_date]
+    completed = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and start_date <= report_local_date(task.completed_at) <= end_date]
     delayed = [
         task
         for task in all_tasks
@@ -149,7 +157,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     ]
     pending_work = [task for task in all_tasks if task.status in {TaskStatus.pending, TaskStatus.in_progress}]
     completed_late = [task for task in all_tasks if task.status == TaskStatus.done and is_effectively_over_expected(task)]
-    created_week = [task for task in all_tasks if start_date <= task.created_at.date() <= end_date]
+    created_week = [task for task in all_tasks if start_date <= report_local_date(task.created_at) <= end_date]
 
     by_department = (
         base.join(Department)

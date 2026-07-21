@@ -117,8 +117,8 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <div><span>الوقت المتوقع</span><strong>{task.expected_minutes} دقيقة</strong></div>
         <div><span>الوقت الفعلي</span><strong className={elapsedSeconds(task) > task.expected_minutes * 60 ? 'timer-over' : ''}>{formatDuration(elapsedSeconds(task))}</strong></div>
         <div><span>تاريخ الإسناد</span><strong>{task.due_date}</strong></div>
-        <div><span>بدأت في</span><strong>{task.started_at || '-'}</strong></div>
-        <div><span>أنجزت في</span><strong>{task.completed_at || '-'}</strong></div>
+        <div><span>بدأت في</span><strong>{formatDateTime(task.started_at)}</strong></div>
+        <div><span>أنجزت في</span><strong>{formatDateTime(task.completed_at)}</strong></div>
       </div>
       <article className="panel"><h2>الوصف</h2><p>{task.description || 'لا يوجد وصف.'}</p></article>
       <article className="panel">
@@ -181,7 +181,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
           <h2>اعتراض على الوقت المتوقع</h2>
           <p>{task.expected_time_complaint_text}</p>
           <p className="note">الحالة: {expectedTimeComplaintStatusLabels[task.expected_time_complaint_status] || expectedTimeComplaintStatusLabels.pending}</p>
-          <small>{task.expected_time_complaint_at || ''}</small>
+          <small>{formatDateTime(task.expected_time_complaint_at)}</small>
         </article>
       )}
       <article className="panel">
@@ -190,12 +190,31 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
           <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="إضافة ملاحظة" />
           <button>إضافة ملاحظة</button>
         </form>
-        {comments.map((item) => <p key={item.id} className="note">{item.comment_text}<small>{item.user?.full_name_ar} - {item.created_at}</small></p>)}
+        {comments.map((item) => <p key={item.id} className="note">{item.comment_text}<small>{item.user?.full_name_ar} - {formatDateTime(item.created_at)}</small></p>)}
       </article>
       <article className="panel">
         <h2>سجل الحالة</h2>
-        {history.map((item) => <p key={item.id} className="note">{statusLabels[item.old_status] || '-'} ← {statusLabels[item.new_status]}{item.reason_text && <small>السبب: {item.reason_text}</small>}<small>{item.changed_at}</small></p>)}
+        {history.map((item) => <p key={item.id} className="note">{statusLabels[item.old_status] || '-'} ← {statusLabels[item.new_status]}{item.reason_text && <small>السبب: {item.reason_text}</small>}<small>{formatDateTime(item.changed_at)}</small></p>)}
       </article>
     </section>
   )
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Amman',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date).reduce((current, part) => {
+    current[part.type] = part.value
+    return current
+  }, {})
+  return `${parts.month}/${parts.day}/${parts.year} ${parts.hour}:${parts.minute}`
 }
