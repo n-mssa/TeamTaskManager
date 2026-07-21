@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import { statusLabels } from '../utils/labels'
 import EmptyState from '../components/EmptyState'
 
 const summaryLabels = {
@@ -42,8 +41,8 @@ export default function Reports({ user, openTask }) {
 
   function exportCsv() {
     const rows = [...(displayedReport?.completed_tasks || []), ...(displayedReport?.pending_in_progress_tasks || []), ...(displayedReport?.delayed_tasks || [])]
-    const csv = ['المهمة,المكلف,القسم,الحالة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز']
-      .concat(rows.map((row) => [row.title, row.assignee, row.department, statusLabels[row.status] || row.status, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)].join(',')))
+    const csv = ['المهمة,المكلف,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز']
+      .concat(rows.map((row) => [row.title, row.assignee, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)].join(',')))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
@@ -204,7 +203,7 @@ function ReportTable({ title, rows, onOpenTask }) {
       <h2>{title}<small>{rows.length} مهمة</small></h2>
       {rows.length
         ? <div className="table-wrap">
-          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>القسم</th><th>الحالة</th><th>تاريخ الإسناد</th><th>تاريخ الإنجاز</th><th>تجاوزت الوقت؟</th><th>مدة التجاوز</th></tr></thead>
+          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>الوقت المتوقع</th><th>تاريخ الإسناد</th><th>تاريخ الإنجاز</th><th>تجاوزت الوقت؟</th><th>مدة التجاوز</th></tr></thead>
             <tbody>{rows.map((row) => (
               <tr
                 key={`${title}-${row.id}`}
@@ -222,8 +221,7 @@ function ReportTable({ title, rows, onOpenTask }) {
               >
                 <td>{row.title}</td>
                 <td>{row.assignee}</td>
-                <td>{row.department}</td>
-                <td>{statusLabels[row.status] || row.status}</td>
+                <td>{row.expected_minutes}</td>
                 <td>{formatDateOnly(row.assigned_date || row.due_date)}</td>
                 <td>{formatDateTime(row.completed_at)}</td>
                 <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
@@ -232,7 +230,7 @@ function ReportTable({ title, rows, onOpenTask }) {
             ))}</tbody>
           </table>
         </div>
-        : <EmptyState compact title="لا توجد مهام في هذا القسم" description="ستظهر المهام هنا عند توفر بيانات ضمن الفترة المحددة." />}
+        : <EmptyState compact title="لا توجد مهام في هذا الجدول" description="ستظهر المهام هنا عند توفر بيانات ضمن الفترة المحددة." />}
     </article>
   )
 }
