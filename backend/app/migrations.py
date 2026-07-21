@@ -38,12 +38,30 @@ INDEXES = [
 ]
 
 
+def column_exists(connection, table_name: str, column_name: str):
+    return connection.execute(
+        text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = current_schema() "
+            "AND table_name = :table_name "
+            "AND column_name = :column_name"
+        ),
+        {"table_name": table_name, "column_name": column_name},
+    ).first() is not None
+
+
+def add_column_if_missing(connection, table_name: str, column_name: str, definition: str):
+    if column_exists(connection, table_name, column_name):
+        return
+    connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
+
+
 def apply_migrations():
     with engine.begin() as connection:
         for column, definition in TASK_COLUMNS.items():
-            connection.execute(text(f"ALTER TABLE tasks ADD COLUMN IF NOT EXISTS {column} {definition}"))
+            add_column_if_missing(connection, "tasks", column, definition)
         for column, definition in USER_COLUMNS.items():
-            connection.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column} {definition}"))
+            add_column_if_missing(connection, "users", column, definition)
         connection.execute(
             text(
                 "UPDATE tasks SET timer_started_at = CURRENT_TIMESTAMP "
@@ -66,7 +84,7 @@ def apply_migrations():
                 "AND expected_time_complaint_status = 'none'"
             )
         )
-        connection.execute(text("ALTER TABLE task_status_history ADD COLUMN IF NOT EXISTS reason_text TEXT"))
+        add_column_if_missing(connection, "task_status_history", "reason_text", "TEXT")
         connection.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS task_attachments ("
