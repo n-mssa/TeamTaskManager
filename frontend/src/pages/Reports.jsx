@@ -97,7 +97,7 @@ function ReportPrintHeader({ report, generatedAt, selectedUser }) {
       <dl>
         <div><dt>الفترة</dt><dd dir="ltr">{formatDateOnly(report.start_date)} - {formatDateOnly(report.end_date)}</dd></div>
         <div><dt>تاريخ الإصدار</dt><dd dir="ltr">{formatDateTime(generatedAt)}</dd></div>
-        <div><dt>النطاق</dt><dd dir="auto">{selectedUser ? selectedUser.full_name_ar : 'كل المستخدمين'}</dd></div>
+        <div><dt>الموظف</dt><dd dir="auto">{selectedUser ? selectedUser.full_name_ar : 'كل المستخدمين'}</dd></div>
       </dl>
     </header>
   )

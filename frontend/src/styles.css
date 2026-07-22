@@ -1473,7 +1473,7 @@ th {
 
 @page {
   size: A4 portrait;
-  margin: 12mm;
+  margin: 12mm 14mm;
 }
 
 @media print {
@@ -2343,6 +2343,11 @@ tbody tr:hover td {
   }
 
   .reports-page {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 178mm;
+    margin: 0 auto;
+    padding-inline: 2mm;
     color: #111827;
     background: #ffffff;
   }
