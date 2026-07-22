@@ -12,7 +12,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Department, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
-from ..schemas import AutoPauseCancel, CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -308,6 +308,23 @@ def create_task_with_attachments(
     return task
 
 
+@router.post("/auto-pause", response_model=list[TaskOut])
+def auto_pause_visible_in_progress(payload: AutoPauseRun, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    tasks = visible_task_query(db, current_user).filter(Task.status == TaskStatus.in_progress).all()
+    for task in tasks:
+        old_status = task.status
+        task.status = TaskStatus.blocked
+        task.hold_reason_text = payload.reason
+        if not task.overrun_reason_text:
+            task.overrun_reason_text = payload.overrun_reason_text or payload.reason
+            task.overrun_reason_category = DelayReasonCategory.external
+        apply_status_effects(task, old_status, task.status, current_user, db)
+    db.commit()
+    for task in tasks:
+        db.refresh(task)
+    return tasks
+
+
 @router.get("/{task_id}", response_model=TaskOut)
 def get_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return get_visible_task_or_403(db, task_id, current_user)
@@ -385,6 +402,17 @@ def cancel_auto_pause(task_id: int, payload: AutoPauseCancel, db: Session = Depe
     if task.status != TaskStatus.blocked:
         return task
     paused_at = payload.paused_at
+    if paused_at is None:
+        pause_history = (
+            db.query(TaskStatusHistory)
+            .filter(
+                TaskStatusHistory.task_id == task.id,
+                TaskStatusHistory.new_status == TaskStatus.blocked,
+            )
+            .order_by(TaskStatusHistory.changed_at.desc())
+            .first()
+        )
+        paused_at = pause_history.changed_at if pause_history else datetime.now(timezone.utc)
     if paused_at.tzinfo is None:
         paused_at = paused_at.replace(tzinfo=timezone.utc)
     now = datetime.now(timezone.utc)

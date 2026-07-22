@@ -134,21 +134,28 @@ export default function App() {
       const storageKey = `team_tasks_auto_pause_${user.id}_${localDateKey()}_${activeWindow.id}`
       if (localStorage.getItem(storageKey)) return
       const pausedAt = new Date().toISOString()
-      api(`/tasks?assigned_to=${user.id}&status=in_progress`)
+      api('/tasks/auto-pause', {
+        method: 'POST',
+        body: JSON.stringify({
+          reason: activeWindow.reason,
+          overrun_reason_text: activeWindow.reason,
+        }),
+      })
         .then(async (tasks) => {
-          const activeTasks = tasks.filter((task) => task.assigned_to_user_id === user.id && task.status === 'in_progress')
-          if (!activeTasks.length) return
-          await Promise.all(activeTasks.map((task) => api(`/tasks/${task.id}/status`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              status: 'blocked',
-              hold_reason_text: activeWindow.reason,
-              overrun_reason_text: task.overrun_reason_text || activeWindow.reason,
-            }),
-          })))
+          const pausedTasks = Array.isArray(tasks) ? tasks : []
+          const ownPausedTasks = pausedTasks.filter((task) => task.assigned_to_user_id === user.id && task.status === 'blocked')
+          const ownAlreadyPausedTasks = ownPausedTasks.length
+            ? []
+            : await api(`/tasks?assigned_to=${user.id}&status=blocked`)
+              .then((items) => items.filter((task) => task.assigned_to_user_id === user.id && task.hold_reason_text === activeWindow.reason))
+              .catch(() => [])
+          const activeTasks = [...ownPausedTasks, ...ownAlreadyPausedTasks].filter((task, index, items) => (
+            items.findIndex((item) => item.id === task.id) === index
+          ))
           localStorage.setItem(storageKey, 'checked')
           window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
-          setAutoPausePrompt({ window: activeWindow, tasks: activeTasks, pausedAt })
+          if (!activeTasks.length) return
+          setAutoPausePrompt({ window: activeWindow, tasks: activeTasks, pausedAt: ownPausedTasks.length ? pausedAt : null })
           if (document.hidden) showAutoPauseBrowserNotification(activeWindow, activeTasks.length)
         })
         .catch(() => {})

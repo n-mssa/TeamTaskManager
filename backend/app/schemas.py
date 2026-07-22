@@ -164,7 +164,12 @@ class SelfCreatedApprovalUpdate(BaseModel):
 
 
 class AutoPauseCancel(BaseModel):
-    paused_at: datetime
+    paused_at: Optional[datetime] = None
+
+
+class AutoPauseRun(BaseModel):
+    reason: str = Field(min_length=1)
+    overrun_reason_text: Optional[str] = None
 
 
 class TaskDelete(BaseModel):
