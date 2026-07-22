@@ -43,8 +43,8 @@ export default function Reports({ user, openTask }) {
 
   function exportCsv() {
     const rows = [...(displayedReport?.completed_tasks || []), ...(displayedReport?.pending_in_progress_tasks || []), ...(displayedReport?.delayed_tasks || [])]
-    const csv = ['المهمة,المكلف,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز']
-      .concat(rows.map((row) => [row.title, row.assignee, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)].join(',')))
+    const csv = ['المهمة,المكلف,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز,الملاحظات']
+      .concat(rows.map((row) => [row.title, row.assignee, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row), formatComments(row.comments)].map(csvCell).join(',')))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
@@ -225,7 +225,7 @@ function ReportTable({ title, rows, onOpenTask }) {
       <h2>{title}<small>{rows.length} مهمة</small></h2>
       {rows.length
         ? <div className="table-wrap">
-          <table className="report-table"><thead><tr><th scope="col">المهمة</th><th scope="col">المكلف</th><th scope="col">الوقت المتوقع</th><th scope="col">تاريخ الإسناد</th><th scope="col">تاريخ الإنجاز</th><th scope="col">تجاوزت الوقت؟</th><th scope="col">مدة التجاوز</th></tr></thead>
+          <table className="report-table"><thead><tr><th scope="col">المهمة</th><th scope="col">المكلف</th><th scope="col">الوقت المتوقع</th><th scope="col">تاريخ الإسناد</th><th scope="col">تاريخ الإنجاز</th><th scope="col">تجاوزت الوقت؟</th><th scope="col">مدة التجاوز</th><th scope="col">الملاحظات</th></tr></thead>
             <tbody>{rows.map((row) => (
               <tr
                 key={`${title}-${row.id}`}
@@ -248,6 +248,7 @@ function ReportTable({ title, rows, onOpenTask }) {
                 <td><span dir="ltr">{formatDateTime(row.completed_at)}</span></td>
                 <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
                 <td><span dir="ltr">{formatOverrun(row)}</span></td>
+                <td><span dir="auto">{formatComments(row.comments)}</span></td>
               </tr>
             ))}</tbody>
           </table>
@@ -266,6 +267,19 @@ function formatOverrun(row) {
   if (hours && minutes) return `${hours}س ${minutes}د`
   if (hours) return `${hours}س`
   return `${minutes}د`
+}
+
+function formatComments(comments = []) {
+  if (!Array.isArray(comments) || !comments.length) return '-'
+  return comments.map((comment) => {
+    const meta = [comment.user, formatDateTime(comment.created_at)].filter(Boolean).join(' - ')
+    return meta ? `${meta}: ${comment.comment_text}` : comment.comment_text
+  }).join(' | ')
+}
+
+function csvCell(value) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
 }
 
 function formatDateOnly(value) {

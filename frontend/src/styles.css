@@ -2602,12 +2602,12 @@ tbody tr:hover td {
 
   .table-wrap th:nth-child(1),
   .table-wrap td:nth-child(1) {
-    width: 33%;
+    width: 25%;
   }
 
   .table-wrap th:nth-child(2),
   .table-wrap td:nth-child(2) {
-    width: 14%;
+    width: 10%;
   }
 
   .table-wrap th:nth-child(3),
@@ -2616,7 +2616,7 @@ tbody tr:hover td {
   .table-wrap td:nth-child(6),
   .table-wrap th:nth-child(7),
   .table-wrap td:nth-child(7) {
-    width: 9%;
+    width: 8%;
     text-align: center;
   }
 
@@ -2624,8 +2624,13 @@ tbody tr:hover td {
   .table-wrap td:nth-child(4),
   .table-wrap th:nth-child(5),
   .table-wrap td:nth-child(5) {
-    width: 13%;
+    width: 11%;
     text-align: center;
     white-space: nowrap;
+  }
+
+  .table-wrap th:nth-child(8),
+  .table-wrap td:nth-child(8) {
+    width: 19%;
   }
 }

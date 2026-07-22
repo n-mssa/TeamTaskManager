@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import Department, DelayReason, Task, TaskStatus, User, UserRole
+from ..models import Department, DelayReason, Task, TaskComment, TaskStatus, User, UserRole
 
 
 DELAY_CATEGORY_COEFFICIENTS = {
@@ -126,6 +126,15 @@ def task_row(task: Task):
         "self_created_approved": task.self_created_approved,
         "self_created_approved_by_user_id": task.self_created_approved_by_user_id,
         "self_created_approved_at": task.self_created_approved_at.isoformat() if task.self_created_approved_at else None,
+        "comments": [
+            {
+                "id": comment.id,
+                "comment_text": comment.comment_text,
+                "created_at": comment.created_at.isoformat() if comment.created_at else None,
+                "user": comment.user.full_name_ar if comment.user else "",
+            }
+            for comment in sorted(task.comments, key=lambda item: item.created_at.isoformat() if item.created_at else "")
+        ],
     }
 
 
@@ -152,7 +161,12 @@ def kpi_summary(tasks: list[Task]):
 
 def weekly_report(db: Session, current_user: User, start_date: date, end_date: date, department_id: int | None = None, user_id: int | None = None):
     base = scoped_tasks(db, current_user, department_id, user_id)
-    all_tasks = base.options(joinedload(Task.assignee), joinedload(Task.department), joinedload(Task.delay_reason)).all()
+    all_tasks = base.options(
+        joinedload(Task.assignee),
+        joinedload(Task.department),
+        joinedload(Task.delay_reason),
+        joinedload(Task.comments).joinedload(TaskComment.user),
+    ).all()
     available_users = allowed_report_users_query(db, current_user).filter(User.is_active.is_(True)).order_by(User.full_name_ar).all()
     completed = [task for task in all_tasks if task.status == TaskStatus.done and task.completed_at and start_date <= report_local_date(task.completed_at) <= end_date]
     delayed = [
