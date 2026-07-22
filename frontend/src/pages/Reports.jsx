@@ -21,6 +21,8 @@ export default function Reports({ user, openTask }) {
   const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
   const displayedReport = useMemo(() => filterReportByUser(report, userId), [report, userId])
   const reportRangeTitle = displayedReport ? `تقرير من ${formatDateOnly(displayedReport.start_date)} إلى ${formatDateOnly(displayedReport.end_date)}` : 'التقارير'
+  const generatedAt = useMemo(() => new Date(), [displayedReport?.start_date, displayedReport?.end_date, userId])
+  const selectedUser = users.find((item) => String(item.id) === String(userId))
 
   async function load() {
     const params = new URLSearchParams()
@@ -55,12 +57,13 @@ export default function Reports({ user, openTask }) {
 
   if (!displayedReport) return <div className="empty">جار التحميل...</div>
   return (
-    <section>
-      <div className="page-head">
+    <section className="reports-page">
+      <div className="page-head screen-only">
         <h1>{reportRangeTitle}</h1>
         <div className="actions"><button onClick={() => window.print()}>طباعة</button><button onClick={exportCsv}>تصدير CSV</button></div>
       </div>
-      <div className="filters">
+      <ReportPrintHeader report={displayedReport} generatedAt={generatedAt} selectedUser={selectedUser} />
+      <div className="filters screen-only">
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         {canFilterUsers && (
@@ -71,14 +74,32 @@ export default function Reports({ user, openTask }) {
         )}
         <button onClick={load}>تحديث التقرير</button>
       </div>
-      <div className="stats">
+      <div className="stats report-summary">
         {Object.entries(displayedReport.summary).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{summaryLabels[key] || key}</span></div>)}
       </div>
       <ReportCharts report={displayedReport} />
-      <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} onOpenTask={openTask} />
-      <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} />
-      <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} onOpenTask={openTask} />
+      <div className="report-detail-sections">
+        <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} onOpenTask={openTask} />
+        <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} />
+        <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} onOpenTask={openTask} />
+      </div>
     </section>
+  )
+}
+
+function ReportPrintHeader({ report, generatedAt, selectedUser }) {
+  return (
+    <header className="report-print-header print-only">
+      <div>
+        <p>لوحة المهام</p>
+        <h1>تقرير إدارة المهام</h1>
+      </div>
+      <dl>
+        <div><dt>الفترة</dt><dd dir="ltr">{formatDateOnly(report.start_date)} - {formatDateOnly(report.end_date)}</dd></div>
+        <div><dt>تاريخ الإصدار</dt><dd dir="ltr">{formatDateTime(generatedAt)}</dd></div>
+        <div><dt>النطاق</dt><dd dir="auto">{selectedUser ? selectedUser.full_name_ar : 'كل المستخدمين'}</dd></div>
+      </dl>
+    </header>
   )
 }
 
@@ -130,15 +151,15 @@ function ReportCharts({ report }) {
 
   return (
     <div className="report-charts">
-      <article className="panel chart-card">
+      <article className="panel chart-card report-section">
         <h2>توزيع الحالات</h2>
         <PieChart data={statusData} />
       </article>
-      <article className="panel chart-card report-chart-print-hidden">
+      <article className="panel chart-card report-section report-chart-print-hidden">
         <h2>المهام حسب الموظف</h2>
         <BarChart data={employeeData} />
       </article>
-      <article className="panel chart-card">
+      <article className="panel chart-card report-section">
         <h2>أسباب تجاوز الوقت</h2>
         <BarChart data={delayData} />
       </article>
@@ -200,11 +221,11 @@ function summarizeRowsByEmployee(rows) {
 
 function ReportTable({ title, rows, onOpenTask }) {
   return (
-    <article className="panel">
+    <article className="panel report-section report-table-section">
       <h2>{title}<small>{rows.length} مهمة</small></h2>
       {rows.length
         ? <div className="table-wrap">
-          <table><thead><tr><th>المهمة</th><th>المكلف</th><th>الوقت المتوقع</th><th>تاريخ الإسناد</th><th>تاريخ الإنجاز</th><th>تجاوزت الوقت؟</th><th>مدة التجاوز</th></tr></thead>
+          <table className="report-table"><thead><tr><th scope="col">المهمة</th><th scope="col">المكلف</th><th scope="col">الوقت المتوقع</th><th scope="col">تاريخ الإسناد</th><th scope="col">تاريخ الإنجاز</th><th scope="col">تجاوزت الوقت؟</th><th scope="col">مدة التجاوز</th></tr></thead>
             <tbody>{rows.map((row) => (
               <tr
                 key={`${title}-${row.id}`}
@@ -220,13 +241,13 @@ function ReportTable({ title, rows, onOpenTask }) {
                 }}
                 title={onOpenTask ? 'فتح تفاصيل المهمة' : undefined}
               >
-                <td>{row.title}</td>
-                <td>{row.assignee}</td>
-                <td>{row.expected_minutes}</td>
-                <td>{formatDateOnly(row.assigned_date || row.due_date)}</td>
-                <td>{formatDateTime(row.completed_at)}</td>
+                <td><span dir="auto">{row.title}</span></td>
+                <td><span dir="auto">{row.assignee}</span></td>
+                <td><span dir="ltr">{row.expected_minutes}</span></td>
+                <td><span dir="ltr">{formatDateOnly(row.assigned_date || row.due_date)}</span></td>
+                <td><span dir="ltr">{formatDateTime(row.completed_at)}</span></td>
                 <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
-                <td>{formatOverrun(row)}</td>
+                <td><span dir="ltr">{formatOverrun(row)}</span></td>
               </tr>
             ))}</tbody>
           </table>

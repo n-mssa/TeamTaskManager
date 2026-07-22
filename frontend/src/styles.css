@@ -714,6 +714,10 @@ small,
   margin-bottom: 16px;
 }
 
+.print-only {
+  display: none !important;
+}
+
 .chart-card {
   min-height: 260px;
 }
@@ -1465,6 +1469,11 @@ th {
   .toggle-label {
     grid-column: span 1;
   }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
 }
 
 @media print {
@@ -2313,9 +2322,83 @@ tbody tr:hover td {
 }
 
 @media print {
+  body {
+    font-size: 10pt;
+    line-height: 1.55;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .screen-only {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
   .page-content {
     max-width: none;
     padding: 0;
+  }
+
+  .reports-page {
+    color: #111827;
+  }
+
+  .report-print-header {
+    display: flex !important;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12mm;
+    margin-bottom: 8mm;
+    padding-bottom: 5mm;
+    border-bottom: 1px solid #cbd5e1;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-print-header h1 {
+    margin: 0;
+    color: #111827;
+    font-size: 18pt;
+    line-height: 1.25;
+  }
+
+  .report-print-header p {
+    margin: 0 0 2mm;
+    color: #475569;
+    font-size: 9pt;
+    font-weight: 700;
+  }
+
+  .report-print-header dl {
+    min-width: 62mm;
+    display: grid;
+    gap: 2mm;
+    margin: 0;
+    font-size: 8.5pt;
+  }
+
+  .report-print-header dl div {
+    display: grid;
+    grid-template-columns: 24mm minmax(0, 1fr);
+    gap: 4mm;
+  }
+
+  .report-print-header dt,
+  .report-print-header dd {
+    margin: 0;
+  }
+
+  .report-print-header dt {
+    color: #64748b;
+    font-weight: 700;
+  }
+
+  .report-print-header dd {
+    color: #111827;
+    font-weight: 700;
   }
 
   .stats div,
@@ -2325,25 +2408,32 @@ tbody tr:hover td {
   }
 
   .stats {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3mm;
+    margin-bottom: 6mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .stats div {
     min-height: 0;
-    padding: 10px 8px;
-    border-radius: 10px;
+    padding: 4mm;
+    border: 1px solid #d9e2ef;
+    border-radius: 4mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .stats strong {
-    font-size: 21px;
-    line-height: 1.05;
+    color: #111827;
+    font-size: 17pt;
+    line-height: 1.1;
   }
 
   .stats span {
-    font-size: 9px;
-    line-height: 1.35;
+    color: #475569;
+    font-size: 8.5pt;
+    line-height: 1.45;
     white-space: normal;
   }
 
@@ -2353,14 +2443,15 @@ tbody tr:hover td {
 
   .report-charts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 4mm;
+    margin-bottom: 7mm;
   }
 
   .chart-card {
     min-height: 0;
-    padding: 12px 14px;
+    padding: 4mm;
     break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .pie-chart-wrap {
@@ -2374,47 +2465,90 @@ tbody tr:hover td {
   }
 
   .bar-chart {
-    gap: 7px;
+    gap: 2.2mm;
   }
 
   .bar-row {
-    grid-template-columns: minmax(80px, 1fr) minmax(100px, 1.5fr) 32px;
-    gap: 8px;
-    font-size: 12px;
+    grid-template-columns: minmax(34mm, 1.2fr) minmax(42mm, 1.8fr) 9mm;
+    gap: 3mm;
+    font-size: 8.5pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .bar-row span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .panel {
-    padding: 14px 16px;
-    margin-bottom: 14px;
+    padding: 5mm;
+    margin-bottom: 6mm;
     break-inside: auto;
   }
 
+  .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-table-section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .report-detail-sections {
+    break-before: auto;
+  }
+
   .panel h2 {
-    margin-bottom: 12px;
-    font-size: 14px;
+    margin: 0 0 4mm;
+    padding-bottom: 3mm;
+    font-size: 12pt;
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   .table-wrap {
-    border-radius: 10px;
+    border-radius: 3mm;
     overflow: visible;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tbody {
+    display: table-row-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .table-wrap table {
     min-width: 0;
     table-layout: fixed;
-    font-size: 10.5px;
-    line-height: 1.55;
+    border-collapse: collapse;
+    font-size: 8.8pt;
+    line-height: 1.65;
   }
 
   th,
   td {
-    padding: 10px 12px;
+    padding: 3mm 2.6mm;
+    border-bottom: 1px solid #e2e8f0;
     white-space: normal;
     overflow-wrap: break-word;
   }
 
   th {
-    font-size: 10px;
+    color: #334155;
+    background: #f8fafc;
+    font-size: 8pt;
+    font-weight: 800;
   }
 
   .table-wrap th:nth-child(1),
