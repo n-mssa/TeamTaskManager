@@ -267,6 +267,7 @@ function summarizeKpi(rows) {
 }
 
 function isKpiEligibleRow(row) {
+  if (row.self_created_approved === false) return false
   if (['pending', 'cancelled'].includes(row.status)) return false
   return row.status === 'done' || Number(row.elapsed_seconds) > 0 || row.is_late || row.is_overdue
 }

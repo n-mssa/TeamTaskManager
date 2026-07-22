@@ -79,6 +79,8 @@ def attributable_delay_hours_for_task(task: Task):
 
 
 def is_kpi_eligible(task: Task):
+    if not task.self_created_approved:
+        return False
     if task.status in {TaskStatus.pending, TaskStatus.cancelled}:
         return False
     return task.status == TaskStatus.done or (task.elapsed_seconds or 0) > 0 or task.is_over_expected
@@ -121,6 +123,9 @@ def task_row(task: Task):
         "production_issue_flagged": task.production_issue_flagged,
         "production_issue_reason": task.production_issue_reason,
         "production_issue_flagged_at": task.production_issue_flagged_at.isoformat() if task.production_issue_flagged_at else None,
+        "self_created_approved": task.self_created_approved,
+        "self_created_approved_by_user_id": task.self_created_approved_by_user_id,
+        "self_created_approved_at": task.self_created_approved_at.isoformat() if task.self_created_approved_at else None,
     }
 
 
@@ -156,8 +161,8 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
         if task.status == TaskStatus.delayed or (is_effectively_over_expected(task) and task.status not in {TaskStatus.done, TaskStatus.cancelled})
     ]
     pending_work = [task for task in all_tasks if task.status in {TaskStatus.pending, TaskStatus.in_progress}]
-    completed_late = [task for task in all_tasks if task.status == TaskStatus.done and is_effectively_over_expected(task)]
-    created_week = [task for task in all_tasks if start_date <= report_local_date(task.created_at) <= end_date]
+    completed_late = [task for task in completed if is_effectively_over_expected(task)]
+    completed_in_period = completed
 
     by_department = (
         base.join(Department)
@@ -193,13 +198,13 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
         "end_date": end_date.isoformat(),
         "selected_user_id": user_id,
         "summary": {
-            "created_this_week": len(created_week),
+            "created_this_week": len(completed_in_period),
             "completed_this_week": len(completed),
             "pending": sum(1 for task in all_tasks if task.status == TaskStatus.pending),
             "in_progress": sum(1 for task in all_tasks if task.status == TaskStatus.in_progress),
             "delayed": len(delayed),
             "completed_late": len(completed_late),
-            "expected_minutes": sum(task.expected_minutes for task in all_tasks),
+            "expected_minutes": sum(task.expected_minutes for task in [*completed, *pending_work, *delayed]),
         },
         "kpi": kpi_summary(list(kpi_tasks_by_id.values())),
         "completed_tasks": [task_row(task) for task in completed],

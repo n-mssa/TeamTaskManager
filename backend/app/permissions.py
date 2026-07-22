@@ -38,7 +38,9 @@ def get_visible_task_or_403(db: Session, task_id: int, user: User) -> Task:
 
 def assert_can_manage_task_payload(user: User, department_id: int, assigned_user: User):
     if user.role == UserRole.employee:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employees cannot create or assign tasks")
+        if assigned_user.id != user.id or department_id != user.department_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employees can create tasks only for themselves")
+        return
     if user.role == UserRole.manager:
         if department_id != user.department_id or assigned_user.department_id != user.department_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managers can assign only inside their department")

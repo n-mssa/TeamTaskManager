@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import DelayReasonCategory, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
+from ..models import DelayReasonCategory, Department, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
-from ..schemas import CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import AutoPauseCancel, CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -146,6 +146,26 @@ def notify_expected_time_complaint(db: Session, task: Task):
         )
 
 
+def notify_self_created_task(db: Session, task: Task):
+    recipients = set()
+    department = task.department or db.query(Department).filter(Department.id == task.department_id).first()
+    if department and department.manager_id:
+        recipients.add(department.manager_id)
+    admin_ids = [row[0] for row in db.query(User.id).filter(User.role == UserRole.admin, User.is_active.is_(True)).all()]
+    recipients.update(admin_ids)
+    recipients.discard(task.assigned_to_user_id)
+    for user_id in recipients:
+        db.add(
+            Notification(
+                user_id=user_id,
+                task=task,
+                title="مهمة بانتظار الاعتماد",
+                message=f"أضاف الموظف مهمة بانتظار الاعتماد: {task.title}",
+                notification_type="self_created_task",
+            )
+        )
+
+
 def create_task_record(payload: TaskCreate, db: Session, current_user: User):
     payload = payload.model_copy(
         update={
@@ -174,9 +194,13 @@ def create_task_record(payload: TaskCreate, db: Session, current_user: User):
         payload.overrun_reason_text,
     )
     task = Task(**payload.model_dump(), created_by_user_id=current_user.id)
+    if current_user.role == UserRole.employee and payload.assigned_to_user_id == current_user.id:
+        task.self_created_approved = False
     apply_status_effects(task, None, task.status, current_user, db)
     db.add(task)
     notify_task_assigned(db, task, payload.assigned_to_user_id)
+    if not task.self_created_approved:
+        notify_self_created_task(db, task)
     return task
 
 
@@ -333,6 +357,41 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     apply_status_effects(task, old_status, task.status, current_user, db)
     if task.assigned_to_user_id != previous_assignee_id:
         notify_task_assigned(db, task, task.assigned_to_user_id)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/{task_id}/self-created-approval", response_model=TaskOut)
+def review_self_created_task(task_id: int, payload: SelfCreatedApprovalUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    if current_user.role not in {UserRole.admin, UserRole.manager}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
+    if task.created_by_user_id != task.assigned_to_user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only employee-created tasks require this approval")
+    task.self_created_approved = payload.approved
+    task.self_created_approved_by_user_id = current_user.id if payload.approved else None
+    task.self_created_approved_at = datetime.now(timezone.utc) if payload.approved else None
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.post("/{task_id}/auto-pause-cancel", response_model=TaskOut)
+def cancel_auto_pause(task_id: int, payload: AutoPauseCancel, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    if current_user.id != task.assigned_to_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the assigned user can cancel automatic pause")
+    if task.status != TaskStatus.blocked:
+        return task
+    paused_at = payload.paused_at
+    if paused_at.tzinfo is None:
+        paused_at = paused_at.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    task.work_seconds = (task.work_seconds or 0) + max(0, int((now - paused_at).total_seconds()))
+    old_status = task.status
+    task.status = TaskStatus.in_progress
+    apply_status_effects(task, old_status, task.status, current_user, db)
     db.commit()
     db.refresh(task)
     return task

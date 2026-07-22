@@ -159,6 +159,14 @@ class ProductionIssueUpdate(BaseModel):
     reason: Optional[str] = None
 
 
+class SelfCreatedApprovalUpdate(BaseModel):
+    approved: bool = True
+
+
+class AutoPauseCancel(BaseModel):
+    paused_at: datetime
+
+
 class TaskDelete(BaseModel):
     reason: str = Field(min_length=1)
 
@@ -193,6 +201,9 @@ class TaskOut(TaskBase):
     production_issue_reason: Optional[str] = None
     production_issue_flagged_by_user_id: Optional[int] = None
     production_issue_flagged_at: Optional[datetime] = None
+    self_created_approved: bool = True
+    self_created_approved_by_user_id: Optional[int] = None
+    self_created_approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     assignee: Optional[UserOut] = None

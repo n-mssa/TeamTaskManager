@@ -32,9 +32,10 @@ export default function TaskForm({ taskId, onSaved, user }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const filteredUsers = useMemo(() => {
+    if (user?.role === 'employee') return users.filter((item) => item.id === user.id)
     if (!form.department_id) return []
     return users.filter((item) => String(item.department_id || '') === String(form.department_id))
-  }, [form.department_id, users])
+  }, [form.department_id, user, users])
 
   useEffect(() => {
     const requests = [
@@ -52,8 +53,15 @@ export default function TaskForm({ taskId, onSaved, user }) {
         expected_hours: formatTimePart(Math.floor(task.expected_minutes / 60)),
         expected_minutes_part: formatTimePart(task.expected_minutes % 60),
       })
+      if (!task && user?.role === 'employee') {
+        setForm((current) => ({
+          ...current,
+          department_id: user.department_id ? String(user.department_id) : '',
+          assigned_to_user_id: String(user.id),
+        }))
+      }
     })
-  }, [taskId])
+  }, [taskId, user])
 
   useEffect(() => {
     if (taskId || form.department_id || departments.length !== 1) return
@@ -165,10 +173,10 @@ export default function TaskForm({ taskId, onSaved, user }) {
       <div className="page-head"><h1>{taskId ? 'تعديل مهمة' : 'إنشاء مهمة'}</h1></div>
       <form className="form-grid" onSubmit={submit}>
         <label>عنوان المهمة<input required value={form.title} onChange={(e) => setValue('title', e.target.value)} /></label>
-        <label>القسم<select required value={form.department_id} onChange={(e) => setValue('department_id', e.target.value)}>
+        <label>القسم<select required value={form.department_id} onChange={(e) => setValue('department_id', e.target.value)} disabled={user?.role === 'employee'}>
           <option value="">اختر القسم</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
         </select></label>
-        <label>المكلف<select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id}>
+        <label>المكلف<select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id || user?.role === 'employee'}>
           <option value="">{form.department_id ? 'اختر الموظف' : 'اختر القسم أولاً'}</option>{filteredUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
         </select></label>
         <label>الأولوية<select value={form.priority} onChange={(e) => setValue('priority', e.target.value)}>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -203,7 +211,8 @@ export default function TaskForm({ taskId, onSaved, user }) {
         </>}
         {form.status === 'blocked' && <label className="span-2">سبب الانتظار<textarea required value={form.hold_reason_text || ''} onChange={(e) => setValue('hold_reason_text', e.target.value)} /></label>}
         {taskId && <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>}
-        <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>
+        {user?.role !== 'employee' && <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>}
+        {user?.role === 'employee' && !taskId && <p className="note span-2">ستظهر هذه المهمة عندك مباشرة، لكنها لن تُحتسب في مؤشرات الأداء حتى يعتمدها المدير.</p>}
         {!taskId && (
           <label className="span-2 file-upload">
             المرفقات

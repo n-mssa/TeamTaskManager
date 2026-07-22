@@ -1043,6 +1043,23 @@ small,
   background: #fffafa;
 }
 
+.task-card.is-pending-approval {
+  border-color: #f6c66d;
+  background: #fff8e8;
+}
+
+.approval-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0 0 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fff1c2;
+  color: #9a5b00;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .task-card-top {
   display: flex;
   align-items: center;
@@ -1375,6 +1392,16 @@ th {
 :root[data-theme='dark'] .task-card.is-overdue,
 :root[data-theme='dark'] .overdue-row td {
   background: #281c22;
+}
+
+:root[data-theme='dark'] .task-card.is-pending-approval {
+  border-color: #8a6520;
+  background: #261f13;
+}
+
+:root[data-theme='dark'] .approval-badge {
+  background: #3a2b12;
+  color: #ffd98a;
 }
 
 :root[data-theme='dark'] .error {

@@ -97,9 +97,19 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     setProductionIssueReason(updatedTask.production_issue_reason || '')
   }
 
+  async function saveSelfCreatedApproval(approved) {
+    const updatedTask = await api(`/tasks/${task.id}/self-created-approval`, {
+      method: 'PATCH',
+      body: JSON.stringify({ approved }),
+    })
+    setTask(updatedTask)
+    window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+  }
+
   if (!task) return <div className="empty">جار التحميل...</div>
   const canReviewDelay = user.role === 'admin' || user.role === 'manager'
   const canFlagProductionIssue = canReviewDelay && task.status === 'done'
+  const isEmployeeSelfCreated = task.created_by_user_id === task.assigned_to_user_id && task.assignee?.role === 'employee'
   return (
     <section>
       <div className="page-head">
@@ -138,6 +148,18 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       </article>
       <article className="panel"><h2>سبب التأخير</h2><p>{task.delay_reason?.name_ar || task.delay_reason_text || 'لا يوجد.'}</p></article>
       <article className="panel"><h2>سبب الانتظار</h2><p>{task.hold_reason_text || 'لا يوجد.'}</p></article>
+      {isEmployeeSelfCreated && (
+        <article className="panel self-approval-panel">
+          <h2>اعتماد مهمة أضافها الموظف</h2>
+          <p>{task.self_created_approved ? 'هذه المهمة معتمدة وتُحتسب في مؤشرات الأداء.' : 'هذه المهمة بانتظار اعتماد المدير قبل احتسابها في مؤشرات الأداء.'}</p>
+          {canReviewDelay && (
+            <div className="inline-form">
+              {!task.self_created_approved && <button className="primary" type="button" onClick={() => saveSelfCreatedApproval(true)}>اعتماد المهمة</button>}
+              {task.self_created_approved && <button type="button" onClick={() => saveSelfCreatedApproval(false)}>إلغاء الاعتماد</button>}
+            </div>
+          )}
+        </article>
+      )}
       {task.status === 'done' && (
         <article className="panel production-issue-panel">
           <h2>مشكلة إنتاج</h2>

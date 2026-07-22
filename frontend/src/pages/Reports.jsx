@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import EmptyState from '../components/EmptyState'
 
 const summaryLabels = {
-  created_this_week: 'المهام المنشأة',
+  created_this_week: 'المهام المنجزة ضمن الفترة',
   completed_this_week: 'المهام المنجزة',
   pending: 'بانتظار التنفيذ',
   in_progress: 'قيد التنفيذ',
@@ -104,6 +104,7 @@ function filterReportByUser(report, userId) {
     by_employee: employeeSummary,
     summary: {
       ...report.summary,
+      created_this_week: completedTasks.length,
       completed_this_week: completedTasks.length,
       pending: visibleRows.filter((row) => row.status === 'pending').length,
       in_progress: visibleRows.filter((row) => row.status === 'in_progress').length,

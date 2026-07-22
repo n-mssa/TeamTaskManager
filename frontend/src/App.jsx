@@ -24,7 +24,7 @@ export default function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
-  const [endOfDayPrompt, setEndOfDayPrompt] = useState(null)
+  const [autoPausePrompt, setAutoPausePrompt] = useState(null)
   const [expectedTimeReview, setExpectedTimeReview] = useState(null)
   const historyReady = useRef(false)
   const handlingHistoryPop = useRef(false)
@@ -126,29 +126,38 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    const todayKey = localDateKey()
-    const storageKey = `team_tasks_end_of_day_prompt_${user.id}_${todayKey}`
 
-    const checkEndOfDay = () => {
+    const checkAutoPauseWindows = () => {
       const now = new Date()
-      const isAfterPromptTime = now.getHours() > 16 || (now.getHours() === 16 && now.getMinutes() >= 55)
-      if (!isAfterPromptTime || localStorage.getItem(storageKey) || endOfDayPrompt) return
-      localStorage.setItem(storageKey, 'checked')
+      const activeWindow = autoPauseWindows.find((item) => isInsideWindow(now, item.start, item.cancelUntil))
+      if (!activeWindow || autoPausePrompt) return
+      const storageKey = `team_tasks_auto_pause_${user.id}_${localDateKey()}_${activeWindow.id}`
+      if (localStorage.getItem(storageKey)) return
+      const pausedAt = new Date().toISOString()
       api(`/tasks?assigned_to=${user.id}&status=in_progress`)
-        .then((tasks) => {
+        .then(async (tasks) => {
           const activeTasks = tasks.filter((task) => task.assigned_to_user_id === user.id && task.status === 'in_progress')
-          if (activeTasks.length) {
-            setEndOfDayPrompt({ tasks: activeTasks })
-            if (document.hidden) showEndOfDayBrowserNotification(activeTasks.length)
-          }
+          if (!activeTasks.length) return
+          await Promise.all(activeTasks.map((task) => api(`/tasks/${task.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              status: 'blocked',
+              hold_reason_text: activeWindow.reason,
+              overrun_reason_text: task.overrun_reason_text || activeWindow.reason,
+            }),
+          })))
+          localStorage.setItem(storageKey, 'checked')
+          window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+          setAutoPausePrompt({ window: activeWindow, tasks: activeTasks, pausedAt })
+          if (document.hidden) showAutoPauseBrowserNotification(activeWindow, activeTasks.length)
         })
         .catch(() => {})
     }
 
-    checkEndOfDay()
-    const interval = window.setInterval(checkEndOfDay, 60_000)
+    checkAutoPauseWindows()
+    const interval = window.setInterval(checkAutoPauseWindows, 30_000)
     return () => window.clearInterval(interval)
-  }, [user, endOfDayPrompt])
+  }, [user, autoPausePrompt])
 
   function defaultRoute(role) {
     if (role === 'employee') return 'my-tasks'
@@ -164,7 +173,7 @@ export default function App() {
     setNotifications([])
     setNotificationsOpen(false)
     setToast(null)
-    setEndOfDayPrompt(null)
+    setAutoPausePrompt(null)
     setExpectedTimeReview(null)
     historyReady.current = false
     handlingHistoryPop.current = false
@@ -293,11 +302,11 @@ export default function App() {
     }
   }
 
-  function showEndOfDayBrowserNotification(taskCount) {
+  function showAutoPauseBrowserNotification(windowConfig, taskCount) {
     if (!('Notification' in window) || window.Notification.permission !== 'granted') return
-    const browserNotification = new window.Notification('اليوم أوشك على الانتهاء', {
-      body: `لديك ${taskCount} مهمة قيد التنفيذ. افتح التطبيق لاختيار نقلها إلى متوقف.`,
-      tag: `team-task-end-of-day-${localDateKey()}`,
+    const browserNotification = new window.Notification(windowConfig.title, {
+      body: `تم نقل ${taskCount} مهمة إلى متوقف. افتح التطبيق لإلغاء الإيقاف إذا كنت ما زلت تعمل.`,
+      tag: `team-task-auto-pause-${windowConfig.id}-${localDateKey()}`,
     })
     browserNotification.onclick = () => {
       window.focus()
@@ -305,19 +314,18 @@ export default function App() {
     }
   }
 
-  async function pauseEndOfDayTasks() {
-    if (!endOfDayPrompt?.tasks?.length) return
-    const reason = 'END OF DAY'
-    await Promise.all(endOfDayPrompt.tasks.map((task) => api(`/tasks/${task.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        status: 'blocked',
-        hold_reason_text: reason,
-        overrun_reason_text: task.overrun_reason_text || reason,
-      }),
+  async function cancelAutoPause() {
+    if (!autoPausePrompt?.tasks?.length) return
+    if (!isInsideWindow(new Date(), autoPausePrompt.window.start, autoPausePrompt.window.cancelUntil)) {
+      setAutoPausePrompt(null)
+      return
+    }
+    await Promise.all(autoPausePrompt.tasks.map((task) => api(`/tasks/${task.id}/auto-pause-cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ paused_at: autoPausePrompt.pausedAt }),
     })))
     window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
-    setEndOfDayPrompt(null)
+    setAutoPausePrompt(null)
   }
 
   if (route === 'loading') return <div className="empty">جار التحميل...</div>
@@ -380,7 +388,7 @@ export default function App() {
         <div className="page-content">
           {route === 'my-tasks' && <MyTasks user={user} openTask={openTask} />}
           {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
-          {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => setRoute(defaultRoute(user.role))} />}
+          {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => { window.dispatchEvent(new CustomEvent('team-tasks-refresh')); setRoute(defaultRoute(user.role)) }} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
           {route === 'kpi' && <Kpi user={user} openTask={openTask} />}
@@ -401,11 +409,11 @@ export default function App() {
         />
       )}
       {toast && <NotificationToast notification={toast} onOpen={() => openNotification(toast)} onClose={() => setToast(null)} />}
-      {endOfDayPrompt && (
-        <EndOfDayPrompt
-          taskCount={endOfDayPrompt.tasks.length}
-          onConfirm={pauseEndOfDayTasks}
-          onDismiss={() => setEndOfDayPrompt(null)}
+      {autoPausePrompt && (
+        <AutoPausePrompt
+          prompt={autoPausePrompt}
+          onCancelPause={cancelAutoPause}
+          onDismiss={() => setAutoPausePrompt(null)}
         />
       )}
       {expectedTimeReview && (
@@ -473,23 +481,24 @@ function NotificationBell({
   )
 }
 
-function EndOfDayPrompt({ taskCount, onConfirm, onDismiss }) {
+function AutoPausePrompt({ prompt, onCancelPause, onDismiss }) {
+  const taskCount = prompt.tasks.length
   return (
     <div className="modal-backdrop" role="presentation" onClick={onDismiss}>
       <section className="briefing-modal end-of-day-modal" role="dialog" aria-modal="true" aria-labelledby="end-of-day-title" onClick={(event) => event.stopPropagation()}>
         <header className="briefing-head">
           <div>
-            <p className="eyebrow">4:55 PM</p>
-            <h2 id="end-of-day-title">اليوم أوشك على الانتهاء</h2>
+            <p className="eyebrow">{prompt.window.label}</p>
+            <h2 id="end-of-day-title">{prompt.window.title}</h2>
           </div>
           <button className="icon-button" onClick={onDismiss} title="إغلاق" aria-label="إغلاق"><X size={18} /></button>
         </header>
         <p className="end-of-day-copy">
-          لديك {taskCount} مهمة قيد التنفيذ. هل تريد نقلها كلها إلى قائمة متوقف مع سبب: <strong>END OF DAY</strong>؟
+          تم نقل {taskCount} مهمة قيد التنفيذ إلى قائمة متوقف بسبب: <strong>{prompt.window.reason}</strong>. إذا كنت ما زلت تعمل، يمكنك إلغاء الإيقاف الآن وسيتم احتساب الوقت منذ لحظة الإيقاف.
         </p>
         <footer className="briefing-actions">
-          <button type="button" onClick={onDismiss}>لا، اتركها كما هي</button>
-          <button className="primary" type="button" onClick={onConfirm}>نعم، انقلها</button>
+          <button type="button" onClick={onDismiss}>اتركها متوقفة</button>
+          <button className="primary" type="button" onClick={onCancelPause}>إلغاء الإيقاف والمتابعة</button>
         </footer>
       </section>
     </div>
@@ -608,6 +617,32 @@ function getBrowserNotificationPermission() {
 function localDateKey() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+const autoPauseWindows = [
+  {
+    id: 'break',
+    label: '12:30 PM',
+    title: 'تم إيقاف المهام للاستراحة',
+    reason: 'استراحة',
+    start: { hour: 12, minute: 30 },
+    cancelUntil: { hour: 12, minute: 45 },
+  },
+  {
+    id: 'end-of-day',
+    label: '5:00 PM',
+    title: 'تم إيقاف المهام لنهاية اليوم',
+    reason: 'END OF DAY',
+    start: { hour: 17, minute: 0 },
+    cancelUntil: { hour: 17, minute: 10 },
+  },
+]
+
+function isInsideWindow(now, start, end) {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const startMinutes = start.hour * 60 + start.minute
+  const endMinutes = end.hour * 60 + end.minute
+  return currentMinutes >= startMinutes && currentMinutes < endMinutes
 }
 
 function routeTitle(route) {
@@ -736,6 +771,7 @@ function buildNav(role) {
   if (role === 'employee') {
     return [
       { route: 'my-tasks', label: 'مهامي', icon: ClipboardList },
+      { route: 'task-form', label: 'إضافة مهمة', icon: Plus },
       { route: 'reports', label: 'تقريري', icon: BarChart3 },
     ]
   }

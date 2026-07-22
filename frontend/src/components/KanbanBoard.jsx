@@ -371,9 +371,10 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const worked = elapsedSeconds(task)
   const overExpected = isOverExpected(task)
   const progress = Math.min(100, Math.round((worked / (task.expected_minutes * 60)) * 100))
+  const pendingSelfApproval = task.created_by_user_id === task.assigned_to_user_id && task.self_created_approved === false
   return (
     <article
-      className={`task-card ${overExpected ? 'is-overdue' : ''}`}
+      className={`task-card ${overExpected ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''}`}
       draggable
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
@@ -385,6 +386,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
           {task.status === 'done' && <ProductionFlag flagged={task.production_issue_flagged} />}
         </span>
       </div>
+      {pendingSelfApproval && <span className="approval-badge">بانتظار الاعتماد</span>}
       <h3>{task.title}</h3>
       {task.description && <p>{task.description}</p>}
       <div className="task-meta">
