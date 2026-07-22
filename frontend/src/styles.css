@@ -2297,6 +2297,29 @@ tbody tr:hover td {
     box-shadow: none;
   }
 
+  .stats {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .stats div {
+    min-height: 0;
+    padding: 10px 8px;
+    border-radius: 10px;
+  }
+
+  .stats strong {
+    font-size: 21px;
+    line-height: 1.05;
+  }
+
+  .stats span {
+    font-size: 9px;
+    line-height: 1.35;
+    white-space: normal;
+  }
+
   .report-chart-print-hidden {
     display: none;
   }
