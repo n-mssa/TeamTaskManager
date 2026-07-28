@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Department, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
-from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_admin
+from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_manager_or_admin
 from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
@@ -515,7 +515,7 @@ def update_production_issue(task_id: int, payload: ProductionIssueUpdate, db: Se
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(task_id: int, payload: TaskDelete, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_admin(current_user)
+    require_manager_or_admin(current_user)
     reason = payload.reason.strip()
     if not reason:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Deletion reason is required")

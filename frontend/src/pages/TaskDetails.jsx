@@ -108,6 +108,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
 
   if (!task) return <div className="empty">جار التحميل...</div>
   const canReviewDelay = user.role === 'admin' || user.role === 'manager'
+  const canDeleteTask = user.role === 'admin' || user.role === 'manager'
   const canFlagProductionIssue = canReviewDelay && task.status === 'done'
   const isEmployeeSelfCreated = task.created_by_user_id === task.assigned_to_user_id && task.assignee?.role === 'employee'
   return (
@@ -116,7 +117,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <h1>{task.title}</h1>
         <div className="actions">
           {user.role !== 'employee' && <button className="primary" onClick={() => editTask(task.id)}>تعديل مهمة</button>}
-          {user.role === 'admin' && <button className="danger" onClick={deleteTask}>حذف المهمة</button>}
+          {canDeleteTask && <button className="danger" onClick={deleteTask}>حذف المهمة</button>}
         </div>
       </div>
       <div className="details-grid">
