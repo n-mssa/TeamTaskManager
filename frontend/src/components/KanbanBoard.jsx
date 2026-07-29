@@ -380,6 +380,14 @@ function TaskCard({ task, onOpen, onDragStart }) {
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
     >
+      {pausedTooLong && (
+        <img
+          className="paused-too-long-icon"
+          src="/assets/warning-icon.webp"
+          alt="تنبيه: المهمة متوقفة منذ وقت طويل"
+          title="المهمة متوقفة منذ وقت طويل"
+        />
+      )}
       <div className="task-card-top">
         <span className={`priority priority-${task.priority}`}>{priorityLabels[task.priority]}</span>
         <span className="task-card-corner">
