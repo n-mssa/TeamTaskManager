@@ -1184,6 +1184,23 @@ td {
   vertical-align: top;
 }
 
+.table-task-title,
+.table-task-description {
+  display: block;
+}
+
+.table-task-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.table-task-description {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 th {
   background: #f4f6f9;
   color: #475467;

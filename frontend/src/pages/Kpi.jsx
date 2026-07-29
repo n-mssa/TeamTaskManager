@@ -194,7 +194,10 @@ function ReviewTable({ rows, onOpenTask }) {
                   }}
                   title={onOpenTask ? 'فتح تفاصيل المهمة' : undefined}
                 >
-                  <td>{row.title}</td>
+                  <td>
+                    <span className="table-task-title">{row.title}</span>
+                    {row.description && <span className="table-task-description">{row.description}</span>}
+                  </td>
                   <td>{row.assignee}</td>
                   <td>{isEffectivelyOverrun(row) ? 'نعم' : 'لا'}</td>
                   <td>{formatMinutes(row.expected_minutes)}</td>

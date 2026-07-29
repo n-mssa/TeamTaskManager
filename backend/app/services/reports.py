@@ -97,6 +97,7 @@ def task_row(task: Task):
     return {
         "id": task.id,
         "title": task.title,
+        "description": task.description,
         "assignee_id": task.assigned_to_user_id,
         "assignee": task.assignee.full_name_ar if task.assignee else "",
         "department": task.department.name_ar if task.department else "",
