@@ -381,11 +381,11 @@ function TaskCard({ task, onOpen, onDragStart }) {
       onClick={() => onOpen(task.id)}
     >
       {pausedTooLong && (
-        <span className="paused-too-long-badge" title="المهمة متوقفة منذ وقت طويل">
+        <span className="paused-too-long-badge" title="المهمة متوقفة منذ أكثر من 3 أيام">
           <img
             className="paused-too-long-icon"
             src="/assets/warning-icon.webp"
-            alt="تنبيه: المهمة متوقفة منذ وقت طويل"
+            alt="تنبيه: المهمة متوقفة منذ أكثر من 3 أيام"
           />
         </span>
       )}
@@ -415,7 +415,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
       </div>
       {task.delay_reason && <small className="delay-note">{task.delay_reason.name_ar}</small>}
       {task.hold_reason_text && task.status === 'blocked' && <small className="delay-note">سبب الانتظار: {task.hold_reason_text}</small>}
-      {pausedTooLong && <small className="pause-warning">هذه المهمة متوقفة منذ أكثر من يوم، يرجى مراجعتها.</small>}
+      {pausedTooLong && <small className="pause-warning">هذه المهمة متوقفة منذ أكثر من 3 أيام، يرجى مراجعتها.</small>}
     </article>
   )
 }
@@ -439,7 +439,7 @@ function isPausedTooLong(task) {
   if (task.status !== 'blocked' || !task.updated_at) return false
   const pausedAt = new Date(task.updated_at).getTime()
   if (!Number.isFinite(pausedAt)) return false
-  return Date.now() - pausedAt >= 24 * 60 * 60 * 1000
+  return Date.now() - pausedAt >= 3 * 24 * 60 * 60 * 1000
 }
 
 function formatMinutes(minutes) {
