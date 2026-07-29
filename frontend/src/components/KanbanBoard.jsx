@@ -372,6 +372,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const overExpected = isOverExpected(task)
   const progress = Math.min(100, Math.round((worked / (task.expected_minutes * 60)) * 100))
   const pendingSelfApproval = task.created_by_user_id === task.assigned_to_user_id && task.self_created_approved === false
+  const pausedTooLong = isPausedTooLong(task)
   return (
     <article
       className={`task-card ${overExpected ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''}`}
@@ -405,6 +406,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
       </div>
       {task.delay_reason && <small className="delay-note">{task.delay_reason.name_ar}</small>}
       {task.hold_reason_text && task.status === 'blocked' && <small className="delay-note">سبب الانتظار: {task.hold_reason_text}</small>}
+      {pausedTooLong && <small className="pause-warning">هذه المهمة متوقفة منذ أكثر من يوم، يرجى مراجعتها.</small>}
     </article>
   )
 }
@@ -422,6 +424,13 @@ function ProductionFlag({ flagged }) {
 
 function isOldCompletedTask(task) {
   return task.status === 'done' && task.completed_at && Date.now() - new Date(task.completed_at).getTime() >= 7 * 24 * 60 * 60 * 1000
+}
+
+function isPausedTooLong(task) {
+  if (task.status !== 'blocked' || !task.updated_at) return false
+  const pausedAt = new Date(task.updated_at).getTime()
+  if (!Number.isFinite(pausedAt)) return false
+  return Date.now() - pausedAt >= 24 * 60 * 60 * 1000
 }
 
 function formatMinutes(minutes) {

@@ -1136,6 +1136,18 @@ small,
   color: #9f1f1f;
 }
 
+.pause-warning {
+  display: block;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .live-timer {
   margin-top: 10px;
   color: var(--muted);
@@ -1423,6 +1435,11 @@ th {
 :root[data-theme='dark'] .approval-badge {
   background: #3a2b12;
   color: #ffd98a;
+}
+
+:root[data-theme='dark'] .pause-warning {
+  background: #3a2415;
+  color: #fdba74;
 }
 
 :root[data-theme='dark'] .error {

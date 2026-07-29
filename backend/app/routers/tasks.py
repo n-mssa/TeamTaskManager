@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
@@ -222,10 +223,13 @@ def list_tasks(
         query = query.filter(Task.assigned_to_user_id == assigned_to)
     if department_id:
         query = query.filter(Task.department_id == department_id)
+    date_filters = []
     if due_from:
-        query = query.filter(Task.due_date >= due_from)
+        date_filters.append(Task.due_date >= due_from)
     if due_to:
-        query = query.filter(Task.due_date <= due_to)
+        date_filters.append(Task.due_date <= due_to)
+    if date_filters:
+        query = query.filter(or_(and_(*date_filters), Task.status == TaskStatus.blocked))
     if overdue:
         tasks = query.order_by(Task.due_date.desc(), Task.id.desc()).all()
         return [
