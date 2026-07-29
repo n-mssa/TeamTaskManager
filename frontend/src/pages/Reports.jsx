@@ -7,6 +7,7 @@ const summaryLabels = {
   completed_this_week: 'المهام المنجزة',
   pending: 'بانتظار التنفيذ',
   in_progress: 'قيد التنفيذ',
+  blocked: 'متوقف',
   delayed: 'المهام المتأخرة',
   completed_late: 'المهام المنجزة متأخرة',
   expected_minutes: 'إجمالي الوقت المتوقع بالدقائق',
@@ -80,7 +81,7 @@ export default function Reports({ user, openTask }) {
       <ReportCharts report={displayedReport} />
       <div className="report-detail-sections">
         <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} onOpenTask={openTask} />
-        <ReportTable title="بانتظار التنفيذ / قيد التنفيذ" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} />
+        <ReportTable title="بانتظار التنفيذ / قيد التنفيذ / متوقف" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} />
         <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} onOpenTask={openTask} />
       </div>
     </section>
@@ -129,6 +130,7 @@ function filterReportByUser(report, userId) {
       completed_this_week: completedTasks.length,
       pending: visibleRows.filter((row) => row.status === 'pending').length,
       in_progress: visibleRows.filter((row) => row.status === 'in_progress').length,
+      blocked: visibleRows.filter((row) => row.status === 'blocked').length,
       delayed: delayedTasks.length,
       completed_late: completedTasks.filter((row) => row.is_late || row.is_overdue).length,
       expected_minutes: visibleRows.reduce((total, row) => total + (Number(row.expected_minutes) || 0), 0),
@@ -140,12 +142,13 @@ function ReportCharts({ report }) {
   const statusData = [
     { label: 'بانتظار التنفيذ', value: report.summary.pending || 0, color: '#f59e0b' },
     { label: 'قيد التنفيذ', value: report.summary.in_progress || 0, color: '#2563eb' },
+    { label: 'متوقف', value: report.summary.blocked || 0, color: '#64748b' },
     { label: 'منجزة', value: report.summary.completed_this_week || 0, color: '#10b981' },
     { label: 'تجاوزت الوقت', value: report.summary.delayed || 0, color: '#ef4444' },
   ].filter((item) => item.value > 0)
   const employeeData = (report.by_employee || []).slice(0, 8).map((item) => ({
     label: item.employee,
-    value: (item.done || 0) + (item.in_progress || 0) + (item.pending || 0) + (item.delayed || 0),
+    value: (item.done || 0) + (item.in_progress || 0) + (item.pending || 0) + (item.blocked || 0) + (item.delayed || 0),
   })).filter((item) => item.value > 0)
   const delayData = (report.delay_reasons || []).slice(0, 6).map((item) => ({ label: item.reason, value: item.count || 0 })).filter((item) => item.value > 0)
 
@@ -208,10 +211,11 @@ function BarChart({ data }) {
 function summarizeRowsByEmployee(rows) {
   const grouped = new Map()
   rows.forEach((row) => {
-    const current = grouped.get(row.assignee) || { employee: row.assignee, done: 0, in_progress: 0, pending: 0, delayed: 0, expected_minutes: 0 }
+    const current = grouped.get(row.assignee) || { employee: row.assignee, done: 0, in_progress: 0, pending: 0, blocked: 0, delayed: 0, expected_minutes: 0 }
     if (row.status === 'done') current.done += 1
     if (row.status === 'in_progress') current.in_progress += 1
     if (row.status === 'pending') current.pending += 1
+    if (row.status === 'blocked') current.blocked += 1
     if (row.is_late || row.is_overdue) current.delayed += 1
     current.expected_minutes += Number(row.expected_minutes) || 0
     grouped.set(row.assignee, current)

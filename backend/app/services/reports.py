@@ -175,7 +175,12 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
         for task in all_tasks
         if task.status == TaskStatus.delayed or (is_effectively_over_expected(task) and task.status not in {TaskStatus.done, TaskStatus.cancelled})
     ]
-    pending_work = [task for task in all_tasks if task.status in {TaskStatus.pending, TaskStatus.in_progress}]
+    delayed_ids = {task.id for task in delayed}
+    pending_work = [
+        task
+        for task in all_tasks
+        if task.status in {TaskStatus.pending, TaskStatus.in_progress, TaskStatus.blocked} and task.id not in delayed_ids
+    ]
     completed_late = [task for task in completed if is_effectively_over_expected(task)]
     completed_in_period = completed
 
@@ -192,6 +197,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
             func.sum(case((Task.status == TaskStatus.done, 1), else_=0)),
             func.sum(case((Task.status == TaskStatus.in_progress, 1), else_=0)),
             func.sum(case((Task.status == TaskStatus.pending, 1), else_=0)),
+            func.sum(case((Task.status == TaskStatus.blocked, 1), else_=0)),
             func.sum(case((Task.status == TaskStatus.delayed, 1), else_=0)),
             func.coalesce(func.sum(Task.expected_minutes), 0),
         )
@@ -217,6 +223,7 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
             "completed_this_week": len(completed),
             "pending": sum(1 for task in all_tasks if task.status == TaskStatus.pending),
             "in_progress": sum(1 for task in all_tasks if task.status == TaskStatus.in_progress),
+            "blocked": sum(1 for task in all_tasks if task.status == TaskStatus.blocked and task.id not in delayed_ids),
             "delayed": len(delayed),
             "completed_late": len(completed_late),
             "expected_minutes": sum(task.expected_minutes for task in [*completed, *pending_work, *delayed]),
@@ -232,8 +239,9 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
                 "done": int(row[1] or 0),
                 "in_progress": int(row[2] or 0),
                 "pending": int(row[3] or 0),
-                "delayed": int(row[4] or 0),
-                "expected_minutes": int(row[5] or 0),
+                "blocked": int(row[4] or 0),
+                "delayed": int(row[5] or 0),
+                "expected_minutes": int(row[6] or 0),
             }
             for row in by_employee
         ],
