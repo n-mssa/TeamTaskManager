@@ -221,6 +221,10 @@ class CommentCreate(BaseModel):
     comment_text: str
 
 
+class CommentUpdate(BaseModel):
+    comment_text: str
+
+
 class CommentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

@@ -1302,6 +1302,37 @@ th {
   padding-top: 10px;
 }
 
+.comment-note {
+  display: grid;
+  gap: 8px;
+}
+
+.comment-note p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.comment-actions button {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.comment-edit-form {
+  display: grid;
+  gap: 8px;
+}
+
+.comment-edit-form textarea {
+  min-height: 90px;
+}
+
 :root[data-theme='dark'] {
   color: #e5e7eb;
   background: #0f1720;
@@ -1374,6 +1405,12 @@ th {
   background: #b42318;
   border-color: #d04438;
   color: #ffffff;
+}
+
+:root[data-theme='dark'] .danger-subtle {
+  color: #fecaca;
+  background: #351d22;
+  border-color: #6b2b33;
 }
 
 :root[data-theme='dark'] .kanban-column,

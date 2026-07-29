@@ -27,6 +27,8 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [comments, setComments] = useState([])
   const [history, setHistory] = useState([])
   const [comment, setComment] = useState('')
+  const [editingCommentId, setEditingCommentId] = useState(null)
+  const [editingCommentText, setEditingCommentText] = useState('')
   const [delayCategory, setDelayCategory] = useState('on_employee')
   const [productionIssueReason, setProductionIssueReason] = useState('')
   const [, setTick] = useState(0)
@@ -55,6 +57,34 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     if (!comment.trim()) return
     await api(`/tasks/${taskId}/comments`, { method: 'POST', body: JSON.stringify({ comment_text: comment }) })
     setComment('')
+    load()
+  }
+
+  function startEditComment(item) {
+    setEditingCommentId(item.id)
+    setEditingCommentText(item.comment_text)
+  }
+
+  function cancelEditComment() {
+    setEditingCommentId(null)
+    setEditingCommentText('')
+  }
+
+  async function saveCommentEdit(event) {
+    event.preventDefault()
+    if (!editingCommentId || !editingCommentText.trim()) return
+    await api(`/tasks/${taskId}/comments/${editingCommentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ comment_text: editingCommentText }),
+    })
+    cancelEditComment()
+    load()
+  }
+
+  async function deleteComment(item) {
+    if (!window.confirm('حذف هذه الملاحظة؟')) return
+    await api(`/tasks/${taskId}/comments/${item.id}`, { method: 'DELETE' })
+    if (editingCommentId === item.id) cancelEditComment()
     load()
   }
 
@@ -213,7 +243,34 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
           <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="إضافة ملاحظة" />
           <button>إضافة ملاحظة</button>
         </form>
-        {comments.map((item) => <p key={item.id} className="note">{item.comment_text}<small>{item.user?.full_name_ar} - {formatDateTime(item.created_at)}</small></p>)}
+        {comments.map((item) => {
+          const canManage = canManageComment(user, item)
+          const isEditing = editingCommentId === item.id
+          return (
+            <div key={item.id} className="note comment-note">
+              {isEditing ? (
+                <form className="comment-edit-form" onSubmit={saveCommentEdit}>
+                  <textarea value={editingCommentText} onChange={(event) => setEditingCommentText(event.target.value)} autoFocus />
+                  <div className="comment-actions">
+                    <button className="primary" type="submit">حفظ</button>
+                    <button type="button" onClick={cancelEditComment}>إلغاء</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <p>{item.comment_text}</p>
+                  <small>{item.user?.full_name_ar} - {formatDateTime(item.created_at)}</small>
+                  {canManage && (
+                    <div className="comment-actions">
+                      <button type="button" onClick={() => startEditComment(item)}>تعديل</button>
+                      <button className="danger-subtle" type="button" onClick={() => deleteComment(item)}>حذف</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })}
       </article>
       <article className="panel">
         <h2>سجل الحالة</h2>
@@ -221,6 +278,11 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       </article>
     </section>
   )
+}
+
+function canManageComment(user, comment) {
+  if (!user || !comment) return false
+  return comment.user_id === user.id || user.role === 'admin' || user.role === 'manager'
 }
 
 function formatDateTime(value) {

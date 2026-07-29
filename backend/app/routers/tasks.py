@@ -13,7 +13,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Department, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_manager_or_admin
-from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, CommentUpdate, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -536,7 +536,10 @@ def delete_task(task_id: int, payload: TaskDelete, db: Session = Depends(get_db)
 @router.post("/{task_id}/comments", response_model=CommentOut)
 def add_comment(task_id: int, payload: CommentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     get_visible_task_or_403(db, task_id, current_user)
-    comment = TaskComment(task_id=task_id, user_id=current_user.id, comment_text=payload.comment_text)
+    comment_text = payload.comment_text.strip()
+    if not comment_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comment cannot be empty")
+    comment = TaskComment(task_id=task_id, user_id=current_user.id, comment_text=comment_text)
     db.add(comment)
     db.commit()
     db.refresh(comment)
@@ -553,6 +556,40 @@ def list_comments(task_id: int, db: Session = Depends(get_db), current_user: Use
         .order_by(TaskComment.created_at.desc())
         .all()
     )
+
+
+def get_visible_comment_or_403(db: Session, task_id: int, comment_id: int, current_user: User):
+    get_visible_task_or_403(db, task_id, current_user)
+    comment = (
+        db.query(TaskComment)
+        .options(joinedload(TaskComment.user))
+        .filter(TaskComment.id == comment_id, TaskComment.task_id == task_id)
+        .first()
+    )
+    if not comment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+    if comment.user_id != current_user.id and current_user.role not in {UserRole.admin, UserRole.manager}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can edit/delete only your own comments")
+    return comment
+
+
+@router.patch("/{task_id}/comments/{comment_id}", response_model=CommentOut)
+def update_comment(task_id: int, comment_id: int, payload: CommentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    comment = get_visible_comment_or_403(db, task_id, comment_id, current_user)
+    comment_text = payload.comment_text.strip()
+    if not comment_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comment cannot be empty")
+    comment.comment_text = comment_text
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+@router.delete("/{task_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(task_id: int, comment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    comment = get_visible_comment_or_403(db, task_id, comment_id, current_user)
+    db.delete(comment)
+    db.commit()
 
 
 @router.get("/{task_id}/history", response_model=list[HistoryOut])
