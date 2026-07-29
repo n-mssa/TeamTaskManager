@@ -1053,6 +1053,10 @@ small,
   background: #fff8e8;
 }
 
+.task-card.is-paused-too-long .task-card-top {
+  padding-left: 34px;
+}
+
 .approval-badge {
   display: inline-flex;
   width: fit-content;
@@ -1093,15 +1097,27 @@ small,
   opacity: 1;
 }
 
-.paused-too-long-icon {
+.paused-too-long-badge {
   position: absolute;
-  top: 9px;
-  left: 9px;
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.16));
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 9px;
+  background: rgba(255, 247, 237, 0.96);
+  box-shadow: 0 4px 12px rgba(154, 52, 18, 0.12);
   pointer-events: none;
+}
+
+.paused-too-long-icon {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  display: block;
 }
 
 .task-card h3 {
@@ -1489,6 +1505,12 @@ th {
 :root[data-theme='dark'] .pause-warning {
   background: #3a2415;
   color: #fdba74;
+}
+
+:root[data-theme='dark'] .paused-too-long-badge {
+  border-color: rgba(251, 191, 36, 0.26);
+  background: rgba(58, 36, 21, 0.96);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
 }
 
 :root[data-theme='dark'] .error {

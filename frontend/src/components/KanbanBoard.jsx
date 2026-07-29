@@ -375,18 +375,19 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const pausedTooLong = isPausedTooLong(task)
   return (
     <article
-      className={`task-card ${overExpected ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''}`}
+      className={`task-card ${overExpected ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''}`}
       draggable
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
     >
       {pausedTooLong && (
-        <img
-          className="paused-too-long-icon"
-          src="/assets/warning-icon.webp"
-          alt="تنبيه: المهمة متوقفة منذ وقت طويل"
-          title="المهمة متوقفة منذ وقت طويل"
-        />
+        <span className="paused-too-long-badge" title="المهمة متوقفة منذ وقت طويل">
+          <img
+            className="paused-too-long-icon"
+            src="/assets/warning-icon.webp"
+            alt="تنبيه: المهمة متوقفة منذ وقت طويل"
+          />
+        </span>
       )}
       <div className="task-card-top">
         <span className={`priority priority-${task.priority}`}>{priorityLabels[task.priority]}</span>
