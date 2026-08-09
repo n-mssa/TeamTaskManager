@@ -1,5 +1,6 @@
 import json
 from os import getenv
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
@@ -8,6 +9,28 @@ from fastapi import HTTPException, status
 
 
 DEFAULT_BUCKET = "task-attachments"
+DEFAULT_LOCAL_ROOT = "/opt/teamtaskmanager/uploads"
+LOCAL_BACKEND = "local"
+SUPABASE_BACKEND = "supabase"
+
+
+def _storage_backend():
+    return (getenv("STORAGE_BACKEND") or SUPABASE_BACKEND).strip().lower()
+
+
+def _local_storage_config():
+    root = Path((getenv("LOCAL_STORAGE_ROOT") or DEFAULT_LOCAL_ROOT).strip()).resolve()
+    bucket = (getenv("LOCAL_STORAGE_BUCKET") or getenv("SUPABASE_STORAGE_BUCKET") or DEFAULT_BUCKET).strip()
+    return root, bucket
+
+
+def _local_object_path(object_path: str):
+    root, bucket = _local_storage_config()
+    target = (root / bucket / object_path).resolve()
+    bucket_root = (root / bucket).resolve()
+    if bucket_root != target and bucket_root not in target.parents:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid attachment path")
+    return target
 
 
 def _storage_config():
@@ -25,6 +48,14 @@ def _storage_config():
 
 
 def storage_config_status():
+    if _storage_backend() == LOCAL_BACKEND:
+        root, bucket = _local_storage_config()
+        return {
+            "configured": True,
+            "backend": LOCAL_BACKEND,
+            "root": str(root),
+            "bucket": bucket,
+        }
     try:
         url, key, bucket = _storage_config()
     except HTTPException as exc:
@@ -35,6 +66,7 @@ def storage_config_status():
     parsed = urlparse(url)
     return {
         "configured": True,
+        "backend": SUPABASE_BACKEND,
         "supabase_host": parsed.netloc or parsed.path,
         "supabase_url_has_rest_suffix": url.endswith("/rest/v1"),
         "bucket": bucket,
@@ -69,6 +101,13 @@ def _object_url(base_url: str, bucket: str, object_path: str):
 
 
 def check_storage():
+    if _storage_backend() == LOCAL_BACKEND:
+        root, bucket = _local_storage_config()
+        bucket_root = root / bucket
+        bucket_root.mkdir(parents=True, exist_ok=True)
+        if not bucket_root.is_dir():
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Local storage path is not a directory")
+        return {"status": "ok", "backend": LOCAL_BACKEND, "bucket": bucket, "root": str(root)}
     base_url, key, bucket = _storage_config()
     request = Request(
         f"{base_url}/storage/v1/bucket/{quote(bucket, safe='')}",
@@ -86,6 +125,14 @@ def check_storage():
 
 
 def upload_object(object_path: str, content: bytes, content_type: str | None):
+    if _storage_backend() == LOCAL_BACKEND:
+        target = _local_object_path(object_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            target.write_bytes(content)
+        except OSError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Local upload failed: {exc}") from exc
+        return
     base_url, key, bucket = _storage_config()
     request = Request(
         _object_url(base_url, bucket, object_path),
@@ -103,6 +150,11 @@ def upload_object(object_path: str, content: bytes, content_type: str | None):
 
 
 def download_object(object_path: str):
+    if _storage_backend() == LOCAL_BACKEND:
+        target = _local_object_path(object_path)
+        if not target.exists() or not target.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found")
+        return target.read_bytes(), None
     base_url, key, bucket = _storage_config()
     request = Request(_object_url(base_url, bucket, object_path), headers=_headers(key), method="GET")
     try:
@@ -118,6 +170,18 @@ def download_object(object_path: str):
 
 def delete_objects(object_paths: list[str]):
     if not object_paths:
+        return
+    if _storage_backend() == LOCAL_BACKEND:
+        for object_path in object_paths:
+            try:
+                target = _local_object_path(object_path)
+            except HTTPException:
+                continue
+            if target.exists() and target.is_file():
+                try:
+                    target.unlink()
+                except OSError:
+                    continue
         return
     base_url, key, bucket = _storage_config()
     request = Request(

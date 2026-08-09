@@ -81,3 +81,26 @@ $env:SECRET_KEY="YOUR_DEPLOYED_SECRET_KEY"
   authentication and authorization remain in FastAPI.
 - The Supabase free database and Render free API are suitable for demos and
   light internal use, but free services may pause or sleep.
+
+## VPS local storage mode
+
+When moving fully off Supabase Storage, set these backend environment variables:
+
+```env
+STORAGE_BACKEND=local
+LOCAL_STORAGE_ROOT=/opt/teamtaskmanager/uploads
+LOCAL_STORAGE_BUCKET=task-attachments
+```
+
+The local file paths must match the `task_attachments.stored_filename` values.
+For example, a stored filename of:
+
+```text
+tasks/189/example.png
+```
+
+must exist at:
+
+```text
+/opt/teamtaskmanager/uploads/task-attachments/tasks/189/example.png
+```
