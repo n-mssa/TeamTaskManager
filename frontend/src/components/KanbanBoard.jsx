@@ -65,6 +65,7 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
     const taskId = Number(event.dataTransfer.getData('text/plain'))
     const task = tasks.find((item) => item.id === taskId)
     if (!task || task.status === status) return
+    if (!canMoveToStatus(task, status)) return
     if (needsOverrunReason(task, status, user)) {
       setOverrunRequest({ task, nextStatus: status })
       return
@@ -161,6 +162,10 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
       )}
     </>
   )
+}
+
+function canMoveToStatus(task, nextStatus) {
+  return nextStatus !== 'pending' || task.status === 'pending'
 }
 
 function needsOverrunReason(task, nextStatus, user) {

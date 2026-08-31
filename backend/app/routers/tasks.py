@@ -61,6 +61,11 @@ def validate_status_reasons(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Overrun reason is required because the task exceeded its expected time")
 
 
+def validate_status_transition(task: Task, status_value: TaskStatus):
+    if task.status != TaskStatus.pending and status_value == TaskStatus.pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tasks cannot be moved back to pending")
+
+
 def apply_status_effects(task: Task, old_status: Optional[TaskStatus], new_status: TaskStatus, changed_by: User, db: Session):
     now = datetime.now(timezone.utc)
     if old_status == TaskStatus.in_progress and new_status != TaskStatus.in_progress and task.timer_started_at:
@@ -363,6 +368,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     assert_can_manage_task_payload(current_user, next_department, assignee)
     next_status = data.get("status", task.status)
     previous_assignee_id = task.assigned_to_user_id
+    validate_status_transition(task, next_status)
     validate_status_reasons(
         task,
         next_status,
@@ -432,6 +438,7 @@ def cancel_auto_pause(task_id: int, payload: AutoPauseCancel, db: Session = Depe
 @router.patch("/{task_id}/status", response_model=TaskOut)
 def update_status(task_id: int, payload: TaskStatusUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = get_visible_task_or_403(db, task_id, current_user)
+    validate_status_transition(task, payload.status)
     validate_status_reasons(
         task,
         payload.status,

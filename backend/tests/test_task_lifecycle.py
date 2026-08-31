@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import HTTPException
 
 from app.models import Task, TaskStatus, User
-from app.routers.tasks import apply_status_effects, validate_status_reasons
+from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary
 
 
@@ -67,6 +67,16 @@ class TaskLifecycleTests(unittest.TestCase):
         self.assertGreaterEqual(paused_seconds, 215)
         self.assertEqual(task.work_seconds, paused_seconds)
         self.assertIsNotNone(task.timer_started_at)
+
+    def test_task_cannot_move_back_to_pending_after_work_starts(self):
+        with self.assertRaises(HTTPException):
+            validate_status_transition(running_task(), TaskStatus.pending)
+
+    def test_pending_task_can_remain_pending(self):
+        task = running_task()
+        task.status = TaskStatus.pending
+
+        validate_status_transition(task, TaskStatus.pending)
 
     def test_accepted_time_complaint_removes_kpi_delay(self):
         task = Task(
