@@ -714,6 +714,10 @@ small,
   margin-bottom: 16px;
 }
 
+.executive-report-page .report-charts {
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+}
+
 .print-only {
   display: none !important;
 }

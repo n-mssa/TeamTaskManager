@@ -345,7 +345,7 @@ export default function App() {
     )
   }
 
-  const nav = buildNav(user.role)
+  const nav = buildNav(user)
 
   return (
     <div className="app-shell">
@@ -398,6 +398,7 @@ export default function App() {
           {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => { window.dispatchEvent(new CustomEvent('team-tasks-refresh')); setRoute(defaultRoute(user.role)) }} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
+          {route === 'executive-report' && <Reports user={user} openTask={openTask} executive />}
           {route === 'kpi' && <Kpi user={user} openTask={openTask} />}
           {route === 'users' && <Users />}
           {route === 'departments' && <Departments />}
@@ -660,6 +661,7 @@ function routeTitle(route) {
     'task-form': 'إدارة المهمة',
     'task-details': 'تفاصيل المهمة',
     reports: 'التقارير',
+    'executive-report': 'تقرير الإدارة التنفيذي',
     kpi: 'مؤشرات الأداء (KPI)',
     users: 'المستخدمون',
     departments: 'الأقسام',
@@ -774,7 +776,9 @@ const themeOptions = [
   { id: 'orange', label: 'برتقالي', color: '#f97316' },
 ]
 
-function buildNav(role) {
+function buildNav(user) {
+  const role = user?.role
+  const isPrimaryAdmin = String(user?.username || '').toLowerCase() === 'admin'
   if (role === 'employee') {
     return [
       { route: 'my-tasks', label: 'مهامي', icon: ClipboardList },
@@ -790,13 +794,15 @@ function buildNav(role) {
       { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
     ]
   }
-  return [
+  const adminNav = [
     { route: 'admin-dashboard', label: 'لوحة الإدارة', icon: ClipboardList },
     { route: 'task-form', label: 'إنشاء مهمة', icon: Plus },
     { route: 'reports', label: 'التقارير', icon: BarChart3 },
+    ...(isPrimaryAdmin ? [{ route: 'executive-report', label: 'تقرير الإدارة التنفيذي', icon: BarChart3 }] : []),
     { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
     { route: 'users', label: 'المستخدمون', icon: UsersIcon },
     { route: 'departments', label: 'الأقسام', icon: Building2 },
     { route: 'delay-reasons', label: 'أسباب التأخير', icon: BarChart3 },
   ]
+  return adminNav
 }

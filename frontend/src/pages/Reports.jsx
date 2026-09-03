@@ -13,19 +13,21 @@ const summaryLabels = {
   expected_minutes: 'إجمالي الوقت المتوقع بالدقائق',
 }
 
-export default function Reports({ user, openTask }) {
+export default function Reports({ user, openTask, executive = false }) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [userId, setUserId] = useState('')
   const [users, setUsers] = useState([])
   const [report, setReport] = useState(null)
   const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
+  const canViewExecutiveReport = user?.role === 'admin' && String(user?.username || '').toLowerCase() === 'admin'
   const displayedReport = useMemo(() => filterReportByUser(report, userId), [report, userId])
-  const reportRangeTitle = displayedReport ? `تقرير من ${formatDateOnly(displayedReport.start_date)} إلى ${formatDateOnly(displayedReport.end_date)}` : 'التقارير'
+  const reportRangeTitle = displayedReport ? `تقرير من ${formatDateOnly(displayedReport.start_date)} إلى ${formatDateOnly(displayedReport.end_date)}` : (executive ? 'تقرير الإدارة التنفيذي' : 'التقارير')
   const generatedAt = useMemo(() => new Date(), [displayedReport?.start_date, displayedReport?.end_date, userId])
   const selectedUser = users.find((item) => String(item.id) === String(userId))
 
   async function load() {
+    if (executive && !canViewExecutiveReport) return
     const params = new URLSearchParams()
     if (startDate) params.set('start_date', startDate)
     if (endDate) params.set('end_date', endDate)
@@ -40,12 +42,19 @@ export default function Reports({ user, openTask }) {
     api('/users?active_only=true').then(setUsers).catch(() => setUsers([]))
   }, [canFilterUsers])
 
-  useEffect(() => { load() }, [startDate, endDate, userId])
+  useEffect(() => { load() }, [startDate, endDate, userId, executive, canViewExecutiveReport])
 
   function exportCsv() {
     const rows = [...(displayedReport?.completed_tasks || []), ...(displayedReport?.pending_in_progress_tasks || []), ...(displayedReport?.delayed_tasks || [])]
-    const csv = ['المهمة,المكلف,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز,الملاحظات']
-      .concat(rows.map((row) => [row.title, row.assignee, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row), formatComments(row.comments)].map(csvCell).join(',')))
+    const header = executive
+      ? 'المهمة,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز'
+      : 'المهمة,المكلف,الوقت المتوقع,تاريخ الإسناد,تاريخ الإنجاز,هل تجاوزت الوقت المتوقع,مدة التجاوز,الملاحظات'
+    const csv = [header]
+      .concat(rows.map((row) => (
+        executive
+          ? [row.title, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row)]
+          : [row.title, row.assignee, row.expected_minutes, formatDateOnly(row.assigned_date || row.due_date), formatDateTime(row.completed_at), row.is_late || row.is_overdue ? 'نعم' : 'لا', formatOverrun(row), formatComments(row.comments)]
+      ).map(csvCell).join(',')))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
@@ -56,14 +65,17 @@ export default function Reports({ user, openTask }) {
     link.click()
   }
 
+  if (executive && !canViewExecutiveReport) {
+    return <EmptyState title="غير مصرح" description="هذا التقرير متاح لحساب مدير النظام الرئيسي فقط." />
+  }
   if (!displayedReport) return <div className="empty">جار التحميل...</div>
   return (
-    <section className="reports-page">
+    <section className={`reports-page${executive ? ' executive-report-page' : ''}`}>
       <div className="page-head screen-only">
-        <h1>{reportRangeTitle}</h1>
+        <h1>{executive ? `تقرير الإدارة التنفيذي من ${formatDateOnly(displayedReport.start_date)} إلى ${formatDateOnly(displayedReport.end_date)}` : reportRangeTitle}</h1>
         <div className="actions"><button onClick={() => window.print()}>طباعة</button><button onClick={exportCsv}>تصدير CSV</button></div>
       </div>
-      <ReportPrintHeader report={displayedReport} generatedAt={generatedAt} selectedUser={selectedUser} />
+      <ReportPrintHeader report={displayedReport} generatedAt={generatedAt} selectedUser={selectedUser} executive={executive} />
       <div className="filters screen-only">
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
@@ -78,22 +90,22 @@ export default function Reports({ user, openTask }) {
       <div className="stats report-summary">
         {Object.entries(displayedReport.summary).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{summaryLabels[key] || key}</span></div>)}
       </div>
-      <ReportCharts report={displayedReport} />
+      <ReportCharts report={displayedReport} hideDelayReasons={executive} />
       <div className="report-detail-sections">
-        <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} onOpenTask={openTask} />
-        <ReportTable title="بانتظار التنفيذ / قيد التنفيذ / متوقف" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} />
-        <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} onOpenTask={openTask} />
+        <ReportTable title="المهام المنجزة" rows={displayedReport.completed_tasks} onOpenTask={openTask} executive={executive} />
+        <ReportTable title="بانتظار التنفيذ / قيد التنفيذ / متوقف" rows={displayedReport.pending_in_progress_tasks} onOpenTask={openTask} executive={executive} />
+        <ReportTable title="المهام المتأخرة" rows={displayedReport.delayed_tasks} onOpenTask={openTask} executive={executive} />
       </div>
     </section>
   )
 }
 
-function ReportPrintHeader({ report, generatedAt, selectedUser }) {
+function ReportPrintHeader({ report, generatedAt, selectedUser, executive }) {
   return (
     <header className="report-print-header print-only">
       <div>
         <p>لوحة المهام</p>
-        <h1>تقرير إدارة المهام</h1>
+        <h1>{executive ? 'تقرير الإدارة التنفيذي' : 'تقرير إدارة المهام'}</h1>
       </div>
       <dl>
         <div><dt>الفترة</dt><dd dir="ltr">{formatDateOnly(report.start_date)} - {formatDateOnly(report.end_date)}</dd></div>
@@ -138,7 +150,7 @@ function filterReportByUser(report, userId) {
   }
 }
 
-function ReportCharts({ report }) {
+function ReportCharts({ report, hideDelayReasons = false }) {
   const statusData = [
     { label: 'بانتظار التنفيذ', value: report.summary.pending || 0, color: '#f59e0b' },
     { label: 'قيد التنفيذ', value: report.summary.in_progress || 0, color: '#2563eb' },
@@ -162,10 +174,12 @@ function ReportCharts({ report }) {
         <h2>المهام حسب الموظف</h2>
         <BarChart data={employeeData} />
       </article>
-      <article className="panel chart-card report-section">
-        <h2>أسباب تجاوز الوقت</h2>
-        <BarChart data={delayData} />
-      </article>
+      {!hideDelayReasons && (
+        <article className="panel chart-card report-section">
+          <h2>أسباب تجاوز الوقت</h2>
+          <BarChart data={delayData} />
+        </article>
+      )}
     </div>
   )
 }
@@ -223,13 +237,13 @@ function summarizeRowsByEmployee(rows) {
   return Array.from(grouped.values())
 }
 
-function ReportTable({ title, rows, onOpenTask }) {
+function ReportTable({ title, rows, onOpenTask, executive = false }) {
   return (
     <article className="panel report-section report-table-section">
       <h2>{title}<small>{rows.length} مهمة</small></h2>
       {rows.length
         ? <div className="table-wrap">
-          <table className="report-table"><thead><tr><th scope="col">المهمة</th><th scope="col">المكلف</th><th scope="col">الوقت المتوقع</th><th scope="col">تاريخ الإسناد</th><th scope="col">تاريخ الإنجاز</th><th scope="col">تجاوزت الوقت؟</th><th scope="col">مدة التجاوز</th><th scope="col">الملاحظات</th></tr></thead>
+          <table className="report-table"><thead><tr><th scope="col">المهمة</th>{!executive && <th scope="col">المكلف</th>}<th scope="col">الوقت المتوقع</th><th scope="col">تاريخ الإسناد</th><th scope="col">تاريخ الإنجاز</th><th scope="col">تجاوزت الوقت؟</th><th scope="col">مدة التجاوز</th>{!executive && <th scope="col">الملاحظات</th>}</tr></thead>
             <tbody>{rows.map((row) => (
               <tr
                 key={`${title}-${row.id}`}
@@ -246,13 +260,13 @@ function ReportTable({ title, rows, onOpenTask }) {
                 title={onOpenTask ? 'فتح تفاصيل المهمة' : undefined}
               >
                 <td><span dir="auto">{row.title}</span></td>
-                <td><span dir="auto">{row.assignee}</span></td>
+                {!executive && <td><span dir="auto">{row.assignee}</span></td>}
                 <td><span dir="ltr">{row.expected_minutes}</span></td>
                 <td><span dir="ltr">{formatDateOnly(row.assigned_date || row.due_date)}</span></td>
                 <td><span dir="ltr">{formatDateTime(row.completed_at)}</span></td>
                 <td>{row.is_late || row.is_overdue ? 'نعم' : 'لا'}</td>
                 <td><span dir="ltr">{formatOverrun(row)}</span></td>
-                <td><span dir="auto">{formatComments(row.comments)}</span></td>
+                {!executive && <td><span dir="auto">{formatComments(row.comments)}</span></td>}
               </tr>
             ))}</tbody>
           </table>
