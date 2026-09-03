@@ -32,11 +32,12 @@ export default function Dashboard({ user, openTask, createTask }) {
 
   const summary = useMemo(() => {
     const assignedThisMonth = tasks.filter((task) => isCurrentMonth(task.assigned_date || task.due_date))
+    const completedThisMonth = tasks.filter((task) => task.status === 'done' && isCurrentMonth(task.completed_at))
     return {
       total: assignedThisMonth.length,
       pending: tasks.filter((task) => task.status === 'pending').length,
       inProgress: tasks.filter((task) => task.status === 'in_progress').length,
-      done: assignedThisMonth.filter((task) => task.status === 'done').length,
+      done: completedThisMonth.length,
       delayed: tasks.filter((task) => task.status === 'delayed' || (isOverExpected(task) && !['done', 'cancelled'].includes(task.status))).length,
     }
   }, [tasks])
@@ -91,10 +92,10 @@ export default function Dashboard({ user, openTask, createTask }) {
         <button className="primary" onClick={createTask}>إنشاء مهمة</button>
       </div>
       <div className="stats">
-        <Stat icon={ListTodo} value={summary.total} label="إجمالي مهام الشهر" tone="slate" />
+        <Stat icon={ListTodo} value={summary.total} label="مهام أُسندت هذا الشهر" tone="slate" />
         <Stat icon={Clock3} value={summary.pending} label="بانتظار التنفيذ" tone="amber" />
         <Stat icon={PlayCircle} value={summary.inProgress} label="قيد التنفيذ" tone="blue" />
-        <Stat icon={CheckCircle2} value={summary.done} label="منجزة من مهام الشهر" tone="green" />
+        <Stat icon={CheckCircle2} value={summary.done} label="منجزة هذا الشهر" tone="green" />
         <Stat icon={AlertTriangle} value={summary.delayed} label="تجاوزت الوقت" tone="red" />
       </div>
       <div className="filters compact">
