@@ -30,13 +30,17 @@ export default function Dashboard({ user, openTask, createTask }) {
     return () => window.removeEventListener('team-tasks-refresh', load)
   }, [status, assignedTo])
 
-  const summary = useMemo(() => ({
-    total: tasks.length,
-    pending: tasks.filter((task) => task.status === 'pending').length,
-    inProgress: tasks.filter((task) => task.status === 'in_progress').length,
-    done: tasks.filter((task) => task.status === 'done').length,
-    delayed: tasks.filter((task) => task.status === 'delayed' || (isOverExpected(task) && !['done', 'cancelled'].includes(task.status))).length,
-  }), [tasks])
+  const summary = useMemo(() => {
+    const assignedThisMonth = tasks.filter((task) => isCurrentMonth(task.assigned_date || task.due_date))
+    const completedThisMonth = tasks.filter((task) => task.status === 'done' && isCurrentMonth(task.completed_at))
+    return {
+      total: assignedThisMonth.length,
+      pending: tasks.filter((task) => task.status === 'pending').length,
+      inProgress: tasks.filter((task) => task.status === 'in_progress').length,
+      done: completedThisMonth.length,
+      delayed: tasks.filter((task) => task.status === 'delayed' || (isOverExpected(task) && !['done', 'cancelled'].includes(task.status))).length,
+    }
+  }, [tasks])
 
   function reconcileTask(updatedTask) {
     setTasks((current) => {
@@ -88,10 +92,10 @@ export default function Dashboard({ user, openTask, createTask }) {
         <button className="primary" onClick={createTask}>إنشاء مهمة</button>
       </div>
       <div className="stats">
-        <Stat icon={ListTodo} value={summary.total} label="إجمالي المهام" tone="slate" />
+        <Stat icon={ListTodo} value={summary.total} label="إجمالي مهام الشهر" tone="slate" />
         <Stat icon={Clock3} value={summary.pending} label="بانتظار التنفيذ" tone="amber" />
         <Stat icon={PlayCircle} value={summary.inProgress} label="قيد التنفيذ" tone="blue" />
-        <Stat icon={CheckCircle2} value={summary.done} label="منجزة" tone="green" />
+        <Stat icon={CheckCircle2} value={summary.done} label="منجزة هذا الشهر" tone="green" />
         <Stat icon={AlertTriangle} value={summary.delayed} label="تجاوزت الوقت" tone="red" />
       </div>
       <div className="filters compact">
@@ -109,4 +113,12 @@ export default function Dashboard({ user, openTask, createTask }) {
 
 function Stat({ icon: Icon, value, label, tone }) {
   return <div className={`stat-card tone-${tone}`}><span className="stat-icon"><Icon size={20} /></span><strong>{value}</strong><span>{label}</span></div>
+}
+
+function isCurrentMonth(value) {
+  if (!value) return false
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return false
+  const now = new Date()
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
 }
