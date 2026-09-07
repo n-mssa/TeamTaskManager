@@ -28,6 +28,7 @@ export default function App() {
   const [expectedTimeReview, setExpectedTimeReview] = useState(null)
   const historyReady = useRef(false)
   const handlingHistoryPop = useRef(false)
+  const pendingScrollRestore = useRef(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -49,6 +50,7 @@ export default function App() {
       const state = event.state
       if (!state?.teamTasksRoute) return
       handlingHistoryPop.current = true
+      pendingScrollRestore.current = typeof state.scrollY === 'number' ? state.scrollY : null
       setSelectedTask(state.selectedTask || null)
       setRoute(state.route)
     }
@@ -72,6 +74,17 @@ export default function App() {
     const currentState = window.history.state
     if (currentState?.teamTasksRoute && currentState.route === route && currentState.selectedTask === selectedTask) return
     window.history.pushState(state, '', hash)
+  }, [route, selectedTask])
+
+  useEffect(() => {
+    if (pendingScrollRestore.current === null || route === 'task-details') return
+    const targetY = pendingScrollRestore.current
+    const delays = [0, 50, 150, 300, 600, 1000]
+    const timers = delays.map((delay, index) => window.setTimeout(() => {
+      window.scrollTo({ top: targetY, behavior: 'auto' })
+      if (index === delays.length - 1) pendingScrollRestore.current = null
+    }, delay))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
   }, [route, selectedTask])
 
   useEffect(() => {
@@ -188,6 +201,10 @@ export default function App() {
   }
 
   function openTask(id) {
+    const currentState = window.history.state
+    if (currentState?.teamTasksRoute) {
+      window.history.replaceState({ ...currentState, scrollY: window.scrollY }, '', window.location.href)
+    }
     setSelectedTask(id)
     setRoute('task-details')
   }

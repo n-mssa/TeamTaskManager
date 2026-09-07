@@ -1,10 +1,9 @@
 from datetime import date, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import Department, DelayReason, Task, TaskComment, TaskStatus, User, UserRole
+from ..models import Task, TaskComment, TaskStatus, User, UserRole
 
 
 DELAY_CATEGORY_COEFFICIENTS = {
@@ -160,6 +159,55 @@ def kpi_summary(tasks: list[Task]):
     }
 
 
+def summarize_tasks_by_employee(tasks: list[Task]):
+    grouped = {}
+    for task in tasks:
+        employee = task.assignee.full_name_ar if task.assignee else ""
+        current = grouped.setdefault(employee, {"done": 0, "in_progress": 0, "pending": 0, "blocked": 0, "delayed": 0, "expected_minutes": 0})
+        if task.status == TaskStatus.done:
+            current["done"] += 1
+        if task.status == TaskStatus.in_progress:
+            current["in_progress"] += 1
+        if task.status == TaskStatus.pending:
+            current["pending"] += 1
+        if task.status == TaskStatus.blocked:
+            current["blocked"] += 1
+        if is_effectively_over_expected(task):
+            current["delayed"] += 1
+        current["expected_minutes"] += task.expected_minutes or 0
+
+    return [
+        {"employee": employee, **values}
+        for employee, values in grouped.items()
+    ]
+
+
+def summarize_tasks_by_department(tasks: list[Task]):
+    grouped = {}
+    for task in tasks:
+        department = task.department.name_ar if task.department else ""
+        grouped[department] = grouped.get(department, 0) + 1
+    return [{"department": department, "count": count} for department, count in grouped.items()]
+
+
+def delay_reason_label(task: Task):
+    if task.overrun_reason_text:
+        return task.overrun_reason_text
+    if task.delay_reason:
+        return task.delay_reason.name_ar
+    if task.delay_reason_text:
+        return task.delay_reason_text
+    return "سبب غير محدد"
+
+
+def summarize_delay_reasons(tasks: list[Task]):
+    grouped = {}
+    for task in tasks:
+        reason = delay_reason_label(task)
+        grouped[reason] = grouped.get(reason, 0) + 1
+    return [{"reason": reason, "count": count} for reason, count in grouped.items()]
+
+
 def weekly_report(db: Session, current_user: User, start_date: date, end_date: date, department_id: int | None = None, user_id: int | None = None):
     base = scoped_tasks(db, current_user, department_id, user_id)
     all_tasks = base.options(
@@ -184,35 +232,9 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
     completed_late = [task for task in completed if is_effectively_over_expected(task)]
     completed_in_period = completed
 
-    by_department = (
-        base.join(Department)
-        .with_entities(Department.name_ar, func.count(Task.id))
-        .group_by(Department.name_ar)
-        .all()
-    )
-    by_employee = (
-        base.join(User, Task.assigned_to_user_id == User.id)
-        .with_entities(
-            User.full_name_ar,
-            func.sum(case((Task.status == TaskStatus.done, 1), else_=0)),
-            func.sum(case((Task.status == TaskStatus.in_progress, 1), else_=0)),
-            func.sum(case((Task.status == TaskStatus.pending, 1), else_=0)),
-            func.sum(case((Task.status == TaskStatus.blocked, 1), else_=0)),
-            func.sum(case((Task.status == TaskStatus.delayed, 1), else_=0)),
-            func.coalesce(func.sum(Task.expected_minutes), 0),
-        )
-        .group_by(User.full_name_ar)
-        .all()
-    )
-    delay_reasons = (
-        base.outerjoin(DelayReason)
-        .filter(or_(Task.status == TaskStatus.delayed, Task.overrun_reason_text.isnot(None)))
-        .with_entities(func.coalesce(DelayReason.name_ar, "سبب غير محدد"), func.count(Task.id))
-        .group_by(DelayReason.name_ar)
-        .all()
-    )
-
     kpi_tasks_by_id = {task.id: task for task in [*completed, *pending_work, *delayed]}
+    report_tasks = list(kpi_tasks_by_id.values())
+    delay_reason_tasks = list({task.id: task for task in [*completed_late, *delayed]}.values())
 
     return {
         "start_date": start_date.isoformat(),
@@ -232,20 +254,9 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
         "completed_tasks": [task_row(task) for task in completed],
         "pending_in_progress_tasks": [task_row(task) for task in pending_work],
         "delayed_tasks": [task_row(task) for task in delayed],
-        "by_department": [{"department": name, "count": count} for name, count in by_department],
-        "by_employee": [
-            {
-                "employee": row[0],
-                "done": int(row[1] or 0),
-                "in_progress": int(row[2] or 0),
-                "pending": int(row[3] or 0),
-                "blocked": int(row[4] or 0),
-                "delayed": int(row[5] or 0),
-                "expected_minutes": int(row[6] or 0),
-            }
-            for row in by_employee
-        ],
-        "delay_reasons": [{"reason": name, "count": count} for name, count in delay_reasons],
+        "by_department": summarize_tasks_by_department(report_tasks),
+        "by_employee": summarize_tasks_by_employee(report_tasks),
+        "delay_reasons": summarize_delay_reasons(delay_reason_tasks),
         "available_users": [
             {"id": user.id, "username": user.username, "full_name_ar": user.full_name_ar, "department_id": user.department_id}
             for user in available_users
