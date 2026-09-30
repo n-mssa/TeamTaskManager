@@ -4,6 +4,10 @@ import { priorityOptions } from '../utils/labels'
 
 const maxAttachments = 3
 const maxAttachmentBytes = 10 * 1024 * 1024
+const financeTitleTemplates = {
+  invoice: 'اصدار فاتورة',
+  receipt: 'سند قبض',
+}
 
 function localDateValue() {
   const now = new Date()
@@ -28,6 +32,8 @@ const emptyTask = {
   overrun_reason_text: '',
   recurrence_frequency: 'none',
   recurrence_start_date: localDateValue(),
+  finance_title_template: '',
+  finance_title_detail: '',
 }
 
 export default function TaskForm({ taskId, onSaved, user }) {
@@ -48,6 +54,8 @@ export default function TaskForm({ taskId, onSaved, user }) {
     () => departments.find((item) => String(item.id) === String(form.department_id)),
     [departments, form.department_id],
   )
+  const isFinanceDepartment = selectedDepartment?.name_ar === 'المالية'
+    || selectedDepartment?.name_en?.trim().toLowerCase() === 'finance'
   const canCreateRecurring = !taskId
     && selectedDepartment?.recurring_tasks_enabled
     && (user?.role === 'super_admin' || user?.role === 'manager')
@@ -104,6 +112,27 @@ export default function TaskForm({ taskId, onSaved, user }) {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
+  function chooseDepartment(value) {
+    const department = departments.find((item) => String(item.id) === String(value))
+    const isFinance = department?.name_ar === 'المالية' || department?.name_en?.trim().toLowerCase() === 'finance'
+    setForm((current) => ({
+      ...current,
+      department_id: value,
+      finance_title_template: isFinance ? current.finance_title_template : '',
+      finance_title_detail: isFinance ? current.finance_title_detail : '',
+      title: !isFinance && current.finance_title_template ? '' : current.title,
+    }))
+  }
+
+  function chooseFinanceTemplate(value) {
+    setForm((current) => ({
+      ...current,
+      finance_title_template: value,
+      finance_title_detail: '',
+      title: '',
+    }))
+  }
+
   function setTimePart(key, value, max) {
     const digits = value.replace(/\D/g, '').slice(0, 2)
     if (digits === '') {
@@ -156,8 +185,17 @@ export default function TaskForm({ taskId, onSaved, user }) {
       setSaving(false)
       return
     }
+    const financePrefix = financeTitleTemplates[form.finance_title_template]
+    const taskTitle = financePrefix
+      ? `${financePrefix} - ${form.finance_title_detail.trim()}`
+      : form.title.trim()
+    if (!taskTitle || (financePrefix && !form.finance_title_detail.trim())) {
+      setError('يرجى إدخال اسم المهمة.')
+      setSaving(false)
+      return
+    }
     const payload = {
-      title: form.title,
+      title: taskTitle,
       description: form.description || null,
       department_id: Number(form.department_id),
       assigned_to_user_id: Number(form.assigned_to_user_id),
@@ -223,10 +261,30 @@ export default function TaskForm({ taskId, onSaved, user }) {
     <section>
       <div className="page-head"><h1>{taskId ? 'تعديل مهمة' : 'إنشاء مهمة'}</h1></div>
       <form className="form-grid" onSubmit={submit}>
-        <label>عنوان المهمة<input required value={form.title} onChange={(e) => setValue('title', e.target.value)} /></label>
-        <label>القسم<select required value={form.department_id} onChange={(e) => setValue('department_id', e.target.value)} disabled={user?.role === 'employee'}>
+        <label>القسم<select required value={form.department_id} onChange={(e) => chooseDepartment(e.target.value)} disabled={user?.role === 'employee'}>
           <option value="">اختر القسم</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
         </select></label>
+        {!taskId && isFinanceDepartment && <label>نوع المهمة المالية<select value={form.finance_title_template} onChange={(e) => chooseFinanceTemplate(e.target.value)}>
+          <option value="">مهمة عادية</option>
+          <option value="invoice">اصدار فاتورة</option>
+          <option value="receipt">سند قبض</option>
+        </select></label>}
+        {form.finance_title_template && !taskId ? (
+          <label>اسم المهمة
+            <div className="finance-title-control" dir="rtl">
+              <span>{financeTitleTemplates[form.finance_title_template]}</span>
+              <input
+                required
+                autoFocus
+                maxLength={220 - financeTitleTemplates[form.finance_title_template].length - 3}
+                value={form.finance_title_detail}
+                onChange={(e) => setValue('finance_title_detail', e.target.value)}
+                placeholder="اكتب اسم العميل أو تفاصيل المهمة"
+              />
+            </div>
+            <small>سيُحفظ العنوان: {financeTitleTemplates[form.finance_title_template]} - {form.finance_title_detail || 'اسم المهمة'}</small>
+          </label>
+        ) : <label>عنوان المهمة<input required value={form.title} onChange={(e) => setValue('title', e.target.value)} /></label>}
         <label>المكلف<select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id || user?.role === 'employee'}>
           <option value="">{form.department_id ? 'اختر الموظف' : 'اختر القسم أولاً'}</option>{filteredUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
         </select></label>
