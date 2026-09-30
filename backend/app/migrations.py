@@ -67,7 +67,7 @@ def apply_migrations():
     if engine.dialect.name == "postgresql":
         # PostgreSQL requires a newly added enum value to be committed before use.
         with engine.begin() as connection:
-            connection.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
+            connection.execute(text("ALTER TYPE public.userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
 
     with engine.begin() as connection:
         for column, definition in TASK_COLUMNS.items():

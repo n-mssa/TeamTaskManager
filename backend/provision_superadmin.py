@@ -2,6 +2,7 @@ from getpass import getpass
 
 from app.auth import hash_password
 from app.database import SessionLocal
+from app.migrations import apply_migrations
 from app.models import User, UserRole
 
 
@@ -9,6 +10,7 @@ SUPER_ADMIN_USERNAME = "superadmin"
 
 
 def main():
+    apply_migrations()
     password = getpass("New superadmin password: ")
     confirmation = getpass("Confirm password: ")
     if password != confirmation:
