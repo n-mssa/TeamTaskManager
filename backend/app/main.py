@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .database import Base, engine
 from .migrations import apply_migrations
-from .routers import auth, delay_reasons, departments, notifications, recurring_tasks, reports, tasks, users
+from .routers import auth, bills_imports, delay_reasons, departments, notifications, recurring_tasks, reports, tasks, users
 from .services.recurring_tasks import start_recurring_scheduler, stop_recurring_scheduler
 from .services.storage import check_storage, storage_config_status
 
@@ -62,3 +62,4 @@ app.include_router(delay_reasons.router)
 app.include_router(reports.router)
 app.include_router(notifications.router)
 app.include_router(recurring_tasks.router)
+app.include_router(bills_imports.router)

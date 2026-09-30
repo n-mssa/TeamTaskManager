@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, false, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
@@ -32,6 +32,8 @@ def visible_task_query(db: Session, user: User):
     query = query.filter(Task.deleted_at.is_(None))
     if user.role == UserRole.employee:
         query = query.filter(Task.assigned_to_user_id == user.id)
+    elif user.role == UserRole.bills_user:
+        query = query.filter(false())
     elif user.role == UserRole.manager:
         query = query.filter(Task.department_id == user.department_id)
     elif user.role == UserRole.admin:

@@ -13,6 +13,7 @@ class UserRole(str, Enum):
     admin = "admin"
     manager = "manager"
     employee = "employee"
+    bills_user = "bills_user"
 
 
 class TaskPriority(str, Enum):
@@ -147,6 +148,11 @@ class Task(Base):
     recurring_template_id = Column(Integer, ForeignKey("recurring_task_templates.id"), nullable=True)
     recurrence_date = Column(Date, nullable=True)
     recurrence_frequency = Column(String(16), nullable=True)
+    billing_import_key = Column(String(64), nullable=True, unique=True)
+    billing_customer_rep = Column(String(160), nullable=True)
+    billing_work_order_id = Column(String(80), nullable=True)
+    billing_customer_name = Column(String(220), nullable=True)
+    billing_material_name = Column(String(320), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     deletion_reason = Column(Text, nullable=True)

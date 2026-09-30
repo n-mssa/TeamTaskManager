@@ -11,6 +11,7 @@ from app.models import Department, RecurringTaskTemplate, Task, TaskStatus, User
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
 from app.routers.users import sync_department_manager
+from app.routers.bills_imports import parse_rows, title_date
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 
@@ -125,7 +126,8 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.finance_manager = User(username="finance-manager", password_hash="x", full_name_ar="Finance manager", role=UserRole.manager, department_id=self.finance.id)
         self.general_employee = User(username="general-user", password_hash="x", full_name_ar="General user", role=UserRole.employee, department_id=self.general.id)
         self.finance_employee = User(username="finance-user", password_hash="x", full_name_ar="Finance user", role=UserRole.employee, department_id=self.finance.id)
-        self.db.add_all([self.super_admin, self.admin, self.finance_manager, self.general_employee, self.finance_employee])
+        self.bills_user = User(username="mariam", password_hash="x", full_name_ar="Mariam", role=UserRole.bills_user)
+        self.db.add_all([self.super_admin, self.admin, self.finance_manager, self.general_employee, self.finance_employee, self.bills_user])
         self.db.flush()
         self.finance.manager_id = self.finance_manager.id
 
@@ -160,6 +162,10 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
     def test_super_admin_can_access_all_tasks(self):
         self.assertTrue(can_access_task(self.super_admin, self.finance_task))
         self.assertTrue(can_access_task(self.super_admin, self.general_task))
+
+    def test_bills_user_cannot_access_tasks(self):
+        self.assertFalse(can_access_task(self.bills_user, self.finance_task))
+        self.assertFalse(can_access_task(self.bills_user, self.general_task))
 
     def test_report_scope_matches_task_visibility(self):
         admin_ids = {task.id for task in scoped_tasks(self.db, self.admin).all()}
@@ -215,6 +221,32 @@ class RecurringTaskScheduleTests(unittest.TestCase):
 
     def test_generated_title_contains_occurrence_date(self):
         self.assertEqual(generated_title("Finance close", date(2026, 10, 3)), "Finance close - 03-10-2026")
+
+
+class BillsImportTests(unittest.TestCase):
+    def test_parser_carries_forward_merged_style_cells_and_builds_titles(self):
+        pasted = (
+            "مسؤول الزبون\tرقم امر العمل\tاسم العميل\tاسم المادة\n"
+            "ابو فيصل\t12643\tشركة انطاليا\tعلبة بقلاوة 1500 غ\n"
+            "\t12695\t\tعلبة بقلاوة 1000 غ"
+        )
+
+        rows = parse_rows(pasted, date(2026, 9, 30))
+
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1]["customer_rep"], "ابو فيصل")
+        self.assertEqual(rows[1]["customer_name"], "شركة انطاليا")
+        self.assertEqual(rows[1]["title"], "12695 - شركة انطاليا - علبة بقلاوة 1000 غ 9/30/2026")
+        self.assertEqual(rows[1]["status"], "ready")
+
+    def test_parser_marks_missing_work_order_as_invalid(self):
+        rows = parse_rows("ابو عمر\t\tشركة العميل\tعلبة", date(2026, 9, 30))
+
+        self.assertEqual(rows[0]["status"], "invalid")
+        self.assertIn("رقم أمر العمل", rows[0]["message"])
+
+    def test_title_date_uses_requested_format(self):
+        self.assertEqual(title_date(date(2026, 9, 3)), "9/3/2026")
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ export const roleLabels = {
   admin: 'مدير النظام',
   manager: 'مدير / قائد فريق',
   employee: 'موظف',
+  bills_user: 'مستخدم إدخال الفواتير',
 }
 
 export const boardColumns = [

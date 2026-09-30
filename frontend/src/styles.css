@@ -1641,6 +1641,276 @@ th {
   margin: 12mm 14mm;
 }
 
+.bills-workspace {
+  min-height: 100vh;
+  background: var(--canvas);
+}
+
+.bills-workspace-header {
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px clamp(18px, 4vw, 54px);
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
+
+.bills-workspace-header > div,
+.bills-workspace-header > div:first-child > div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.bills-workspace-header > div:first-child > div:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.bills-workspace-header strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.bills-workspace-header span:not(.brand-mark) {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bills-workspace-main {
+  width: min(1380px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 34px 0 60px;
+}
+
+.bills-import-page {
+  display: grid;
+  gap: 20px;
+}
+
+.bills-hero {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.bills-hero-icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  color: #047857;
+  background: #d1fae5;
+}
+
+.bills-hero h1 {
+  margin: 1px 0 4px;
+  color: var(--text);
+  font-size: 27px;
+}
+
+.bills-hero p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.bills-import-form {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.bills-import-guide {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 15px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+}
+
+.bills-import-guide div {
+  display: grid;
+  gap: 3px;
+}
+
+.bills-import-guide span {
+  color: #53657c;
+  font-size: 12px;
+}
+
+.bills-paste-field textarea {
+  min-height: 210px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.9;
+  direction: rtl;
+}
+
+.bills-batch-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) minmax(180px, 0.7fr);
+  align-items: end;
+  gap: 14px;
+}
+
+.bills-batch-options button {
+  width: 100%;
+}
+
+.bills-import-error {
+  margin: 0;
+}
+
+.bills-preview {
+  padding: 0;
+  overflow: hidden;
+}
+
+.bills-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+}
+
+.bills-preview-head h2 {
+  margin: 2px 0 4px;
+  padding: 0;
+  border: 0;
+}
+
+.bills-preview-head > div > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.bills-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.bills-summary span,
+.bills-row-status {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bills-summary .ready,
+.bills-row-status.ready,
+.bills-row-status.created {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.bills-summary .duplicate,
+.bills-row-status.duplicate {
+  color: #a16207;
+  background: #fef3c7;
+}
+
+.bills-summary .invalid,
+.bills-row-status.invalid {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.bills-success {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 22px 18px;
+  padding: 12px 14px;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 11px;
+}
+
+.bills-preview-table {
+  border-width: 1px 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.bills-row-invalid td {
+  background: #fff7f7;
+}
+
+.bills-row-duplicate td {
+  background: #fffbeb;
+}
+
+.bills-confirm-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 22px;
+  background: var(--surface-soft);
+}
+
+.bills-confirm-bar > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+:root[data-theme='dark'] .bills-workspace-header {
+  background: rgba(16, 27, 41, 0.94);
+}
+
+:root[data-theme='dark'] .bills-import-guide {
+  color: #93c5fd;
+  background: #172b46;
+  border-color: #284766;
+}
+
+:root[data-theme='dark'] .bills-import-guide span,
+:root[data-theme='dark'] .bills-row-invalid td,
+:root[data-theme='dark'] .bills-row-duplicate td {
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+@media (max-width: 760px) {
+  .bills-batch-options {
+    grid-template-columns: 1fr;
+  }
+
+  .bills-preview-head,
+  .bills-confirm-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bills-summary {
+    justify-content: flex-start;
+  }
+}
+
 @media print {
   :root,
   :root[data-theme='dark'] {
