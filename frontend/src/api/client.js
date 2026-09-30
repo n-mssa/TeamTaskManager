@@ -52,7 +52,7 @@ async function requestApi(path, options) {
     let message = 'حدث خطأ غير متوقع'
     try {
       const body = await response.json()
-      message = body.detail || message
+      message = formatApiError(body.detail) || message
     } catch {
       message = response.statusText
     }
@@ -60,6 +60,22 @@ async function requestApi(path, options) {
   }
   if (response.status === 204) return null
   return response.json()
+}
+
+function formatApiError(detail) {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        const field = Array.isArray(item?.loc) ? item.loc.at(-1) : null
+        return [field, item?.msg].filter(Boolean).join(': ')
+      })
+      .filter(Boolean)
+      .join(' | ')
+  }
+  if (detail && typeof detail === 'object') return detail.message || JSON.stringify(detail)
+  return ''
 }
 
 export { API_BASE_URL }
