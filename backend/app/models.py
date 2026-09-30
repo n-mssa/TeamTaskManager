@@ -47,6 +47,7 @@ class Department(Base):
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_restricted = Column(Boolean, default=False, nullable=False)
     recurring_tasks_enabled = Column(Boolean, default=False, nullable=False)
+    billing_assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

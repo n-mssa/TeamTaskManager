@@ -11,7 +11,7 @@ from app.models import Department, RecurringTaskTemplate, Task, TaskStatus, User
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
 from app.routers.users import sync_department_manager
-from app.routers.bills_imports import parse_rows, title_date
+from app.routers.bills_imports import finance_import_assignee, parse_rows, title_date
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 
@@ -126,8 +126,9 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.finance_manager = User(username="finance-manager", password_hash="x", full_name_ar="Finance manager", role=UserRole.manager, department_id=self.finance.id)
         self.general_employee = User(username="general-user", password_hash="x", full_name_ar="General user", role=UserRole.employee, department_id=self.general.id)
         self.finance_employee = User(username="finance-user", password_hash="x", full_name_ar="Finance user", role=UserRole.employee, department_id=self.finance.id)
+        self.aseel = User(username="aseel", password_hash="x", full_name_ar="Aseel", role=UserRole.employee, department_id=self.finance.id)
         self.bills_user = User(username="mariam", password_hash="x", full_name_ar="Mariam", role=UserRole.bills_user)
-        self.db.add_all([self.super_admin, self.admin, self.finance_manager, self.general_employee, self.finance_employee, self.bills_user])
+        self.db.add_all([self.super_admin, self.admin, self.finance_manager, self.general_employee, self.finance_employee, self.aseel, self.bills_user])
         self.db.flush()
         self.finance.manager_id = self.finance_manager.id
 
@@ -189,6 +190,15 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.db.refresh(self.general)
         self.assertIsNone(self.finance.manager_id)
         self.assertEqual(self.general.manager_id, self.finance_manager.id)
+
+    def test_finance_import_defaults_to_aseel_and_can_be_configured(self):
+        assignee, _ = finance_import_assignee(self.db, self.finance)
+        self.assertEqual(assignee.id, self.aseel.id)
+
+        self.finance.billing_assignee_id = self.finance_employee.id
+        self.db.commit()
+        assignee, _ = finance_import_assignee(self.db, self.finance)
+        self.assertEqual(assignee.id, self.finance_employee.id)
 
 
 class RecurringTaskScheduleTests(unittest.TestCase):
