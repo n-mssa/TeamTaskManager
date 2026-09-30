@@ -1,6 +1,7 @@
 from datetime import date, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 
 from ..models import Department, Task, TaskComment, TaskStatus, User, UserRole
@@ -27,7 +28,9 @@ def report_local_date(value):
 def allowed_report_users_query(db: Session, current_user: User):
     query = db.query(User)
     current_role = role_value(current_user)
-    if current_role == UserRole.employee.value:
+    if current_role == UserRole.bills_user.value:
+        query = query.filter(false())
+    elif current_role == UserRole.employee.value:
         query = query.filter(User.id == current_user.id)
     elif current_role == UserRole.manager.value:
         query = query.filter(User.department_id == current_user.department_id)
@@ -42,7 +45,9 @@ def allowed_report_users_query(db: Session, current_user: User):
 def scoped_tasks(db: Session, current_user: User, department_id: int | None = None, user_id: int | None = None):
     query = db.query(Task).filter(Task.deleted_at.is_(None))
     current_role = role_value(current_user)
-    if current_role == UserRole.employee.value:
+    if current_role == UserRole.bills_user.value:
+        query = query.filter(false())
+    elif current_role == UserRole.employee.value:
         query = query.filter(Task.assigned_to_user_id == current_user.id)
     elif current_role == UserRole.manager.value:
         query = query.filter(Task.department_id == current_user.department_id)

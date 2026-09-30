@@ -202,6 +202,7 @@ class TaskOut(TaskBase):
     recurring_template_id: Optional[int] = None
     recurrence_date: Optional[date] = None
     recurrence_frequency: Optional[str] = None
+    billing_work_order_id: Optional[str] = None
     completed_at: Optional[datetime]
     overrun_reason_category: DelayReasonCategory = DelayReasonCategory.on_employee
     overrun_reason_approved: bool = False
@@ -295,3 +296,30 @@ class RecurringTaskOut(RecurringTaskCreate):
     created_at: datetime
     updated_at: datetime
     assignee: Optional[UserOut] = None
+
+
+class BillsImportRequest(BaseModel):
+    pasted_text: str = Field(min_length=1, max_length=200_000)
+    task_date: date
+    expected_minutes: int = Field(default=30, gt=0, le=1440)
+
+
+class BillsImportRow(BaseModel):
+    row_number: int
+    customer_rep: str = ""
+    work_order_id: str = ""
+    customer_name: str = ""
+    material_name: str = ""
+    title: str = ""
+    status: str
+    message: Optional[str] = None
+
+
+class BillsImportResult(BaseModel):
+    department_name: str
+    assignee_name: str
+    rows: list[BillsImportRow]
+    ready_count: int
+    duplicate_count: int
+    invalid_count: int
+    created_count: int = 0

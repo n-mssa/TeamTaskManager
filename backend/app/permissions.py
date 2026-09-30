@@ -34,6 +34,8 @@ def can_access_task(user: User, task: Task) -> bool:
         return bool(task.department and not task.department.is_restricted)
     if user.role == UserRole.manager:
         return task.department_id == user.department_id
+    if user.role == UserRole.bills_user:
+        return False
     return task.assigned_to_user_id == user.id
 
 
@@ -52,6 +54,10 @@ def get_visible_task_or_403(db: Session, task_id: int, user: User) -> Task:
 
 
 def assert_can_manage_task_payload(db: Session, user: User, department_id: int, assigned_user: User):
+    if user.role == UserRole.bills_user:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bills users can create tasks only through the bills import screen")
+    if assigned_user.role == UserRole.bills_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bills users cannot be assigned tasks")
     if user.role == UserRole.employee:
         if assigned_user.id != user.id or department_id != user.department_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employees can create tasks only for themselves")

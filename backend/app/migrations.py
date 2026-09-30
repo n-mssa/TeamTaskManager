@@ -26,6 +26,11 @@ TASK_COLUMNS = {
     "recurring_template_id": "INTEGER REFERENCES recurring_task_templates(id)",
     "recurrence_date": "DATE",
     "recurrence_frequency": "VARCHAR(16)",
+    "billing_import_key": "VARCHAR(64)",
+    "billing_customer_rep": "VARCHAR(160)",
+    "billing_work_order_id": "VARCHAR(80)",
+    "billing_customer_name": "VARCHAR(220)",
+    "billing_material_name": "VARCHAR(320)",
 }
 
 USER_COLUMNS = {
@@ -47,6 +52,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_task_attachments_task_created ON task_attachments (task_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_notifications_user_read_created ON notifications (user_id, read_at, created_at DESC)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_task_recurring_occurrence ON tasks (recurring_template_id, recurrence_date) WHERE recurring_template_id IS NOT NULL",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_billing_import_key ON tasks (billing_import_key) WHERE billing_import_key IS NOT NULL",
 ]
 
 
@@ -73,6 +79,7 @@ def apply_migrations():
         # PostgreSQL requires a newly added enum value to be committed before use.
         with engine.begin() as connection:
             connection.execute(text("ALTER TYPE public.userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
+            connection.execute(text("ALTER TYPE public.userrole ADD VALUE IF NOT EXISTS 'bills_user'"))
 
     with engine.begin() as connection:
         for column, definition in TASK_COLUMNS.items():

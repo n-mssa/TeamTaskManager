@@ -12,6 +12,7 @@ import Departments from './pages/Departments'
 import DelayReasons from './pages/DelayReasons'
 import TaskForm from './pages/TaskForm'
 import TaskDetails from './pages/TaskDetails'
+import BillsImport from './pages/BillsImport'
 import { formatDuration, isOverExpected, remainingExpectedSeconds } from './utils/tasks'
 
 export default function App() {
@@ -88,7 +89,7 @@ export default function App() {
   }, [route, selectedTask])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || user.role === 'bills_user') return
     const briefingKey = `team_tasks_briefing_${user.id}`
     if (sessionStorage.getItem(briefingKey)) return
 
@@ -112,7 +113,7 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || user.role === 'bills_user') return
     const seenKey = `team_tasks_seen_notifications_${user.id}`
     const seen = new Set(JSON.parse(sessionStorage.getItem(seenKey) || '[]'))
 
@@ -138,7 +139,7 @@ export default function App() {
   }, [user, browserNotificationPermission])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || user.role === 'bills_user') return
 
     const checkAutoPauseWindows = () => {
       const now = new Date()
@@ -180,6 +181,7 @@ export default function App() {
   }, [user, autoPausePrompt])
 
   function defaultRoute(role) {
+    if (role === 'bills_user') return 'bills-import'
     if (role === 'employee') return 'my-tasks'
     if (role === 'manager') return 'dashboard'
     return 'admin-dashboard'
@@ -362,6 +364,18 @@ export default function App() {
     )
   }
 
+  if (user.role === 'bills_user') {
+    return (
+      <div className="bills-workspace">
+        <header className="bills-workspace-header">
+          <div><span className="brand-mark"><ClipboardList size={18} /></span><div><strong>إدخال مهام المالية</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
+          <div className="topbar-actions"><ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme, user)} /><button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button></div>
+        </header>
+        <main className="bills-workspace-main"><BillsImport /></main>
+      </div>
+    )
+  }
+
   const nav = buildNav(user)
 
   return (
@@ -417,7 +431,7 @@ export default function App() {
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
           {route === 'executive-report' && <Reports user={user} openTask={openTask} executive />}
           {route === 'kpi' && <Kpi user={user} openTask={openTask} />}
-          {route === 'users' && <Users />}
+          {route === 'users' && <Users user={user} />}
           {route === 'departments' && <Departments user={user} />}
           {route === 'delay-reasons' && <DelayReasons />}
         </div>
