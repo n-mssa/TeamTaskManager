@@ -417,8 +417,8 @@ export default function App() {
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
           {route === 'executive-report' && <Reports user={user} openTask={openTask} executive />}
           {route === 'kpi' && <Kpi user={user} openTask={openTask} />}
-          {route === 'users' && <Users />}
-          {route === 'departments' && <Departments />}
+          {route === 'users' && <Users currentUser={user} />}
+          {route === 'departments' && <Departments user={user} />}
           {route === 'delay-reasons' && <DelayReasons />}
         </div>
       </main>
@@ -795,7 +795,7 @@ const themeOptions = [
 
 function buildNav(user) {
   const role = user?.role
-  const isPrimaryAdmin = String(user?.username || '').toLowerCase() === 'admin'
+  const isSuperAdmin = role === 'super_admin'
   if (role === 'employee') {
     return [
       { route: 'my-tasks', label: 'مهامي', icon: ClipboardList },
@@ -815,7 +815,7 @@ function buildNav(user) {
     { route: 'admin-dashboard', label: 'لوحة الإدارة', icon: ClipboardList },
     { route: 'task-form', label: 'إنشاء مهمة', icon: Plus },
     { route: 'reports', label: 'التقارير', icon: BarChart3 },
-    ...(isPrimaryAdmin ? [{ route: 'executive-report', label: 'تقرير الإدارة التنفيذي', icon: BarChart3 }] : []),
+    ...(isSuperAdmin ? [{ route: 'executive-report', label: 'تقرير الإدارة التنفيذي', icon: BarChart3 }] : []),
     { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
     { route: 'users', label: 'المستخدمون', icon: UsersIcon },
     { route: 'departments', label: 'الأقسام', icon: Building2 },

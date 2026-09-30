@@ -20,6 +20,7 @@ class DepartmentBase(BaseModel):
     name_ar: str
     name_en: Optional[str] = None
     manager_id: Optional[int] = None
+    is_restricted: bool = False
 
 
 class DepartmentCreate(DepartmentBase):

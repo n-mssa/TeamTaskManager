@@ -42,7 +42,7 @@ def main():
             defaults={
                 "password_hash": hash_password("admin123"),
                 "full_name_ar": "مدير النظام",
-                "role": UserRole.admin,
+                "role": UserRole.super_admin,
                 "department_id": departments["الإدارة"].id,
             },
         )

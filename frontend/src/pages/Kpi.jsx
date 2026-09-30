@@ -9,7 +9,7 @@ export default function Kpi({ user, openTask }) {
   const [users, setUsers] = useState([])
   const [report, setReport] = useState(null)
   const [error, setError] = useState('')
-  const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
+  const canFilterUsers = ['super_admin', 'admin', 'manager'].includes(user?.role)
   const displayedReport = useMemo(() => filterReportByUser(report, userId), [report, userId])
 
   async function load() {

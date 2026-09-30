@@ -3,9 +3,14 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
-from app.models import Task, TaskStatus, User
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.database import Base
+from app.models import Department, Task, TaskStatus, User, UserRole
+from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
-from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary
+from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 
 
 class FakeSession:
@@ -100,6 +105,68 @@ class TaskLifecycleTests(unittest.TestCase):
         self.assertEqual(summary["overdue_tasks"], 0)
         self.assertEqual(summary["attributable_delay_hours"], 0)
         self.assertEqual(summary["commitment_rate"], 100)
+
+
+class RestrictedDepartmentPermissionTests(unittest.TestCase):
+    def setUp(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        self.db = sessionmaker(bind=engine)()
+
+        self.general = Department(name_ar="General", is_restricted=False)
+        self.finance = Department(name_ar="Finance", is_restricted=True)
+        self.db.add_all([self.general, self.finance])
+        self.db.flush()
+
+        self.super_admin = User(username="admin", password_hash="x", full_name_ar="Super", role=UserRole.super_admin, department_id=self.general.id)
+        self.admin = User(username="other-admin", password_hash="x", full_name_ar="Admin", role=UserRole.admin, department_id=self.general.id)
+        self.finance_manager = User(username="finance-manager", password_hash="x", full_name_ar="Finance manager", role=UserRole.manager, department_id=self.finance.id)
+        self.general_employee = User(username="general-user", password_hash="x", full_name_ar="General user", role=UserRole.employee, department_id=self.general.id)
+        self.finance_employee = User(username="finance-user", password_hash="x", full_name_ar="Finance user", role=UserRole.employee, department_id=self.finance.id)
+        self.db.add_all([self.super_admin, self.admin, self.finance_manager, self.general_employee, self.finance_employee])
+        self.db.flush()
+        self.finance.manager_id = self.finance_manager.id
+
+        self.general_task = self.make_task("General task", self.general.id, self.general_employee.id)
+        self.finance_task = self.make_task("Finance task", self.finance.id, self.finance_employee.id)
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.close()
+
+    def make_task(self, title, department_id, assignee_id):
+        task = Task(
+            title=title,
+            department_id=department_id,
+            assigned_to_user_id=assignee_id,
+            created_by_user_id=self.super_admin.id,
+            status=TaskStatus.pending,
+            expected_minutes=30,
+            due_date=date.today(),
+        )
+        self.db.add(task)
+        return task
+
+    def test_normal_admin_cannot_access_restricted_task(self):
+        self.assertFalse(can_access_task(self.admin, self.finance_task))
+        self.assertTrue(can_access_task(self.admin, self.general_task))
+
+    def test_finance_manager_can_access_own_department_task(self):
+        self.assertTrue(can_access_task(self.finance_manager, self.finance_task))
+        self.assertFalse(can_access_task(self.finance_manager, self.general_task))
+
+    def test_super_admin_can_access_all_tasks(self):
+        self.assertTrue(can_access_task(self.super_admin, self.finance_task))
+        self.assertTrue(can_access_task(self.super_admin, self.general_task))
+
+    def test_report_scope_matches_task_visibility(self):
+        admin_ids = {task.id for task in scoped_tasks(self.db, self.admin).all()}
+        manager_ids = {task.id for task in scoped_tasks(self.db, self.finance_manager).all()}
+        super_admin_ids = {task.id for task in scoped_tasks(self.db, self.super_admin).all()}
+
+        self.assertEqual(admin_ids, {self.general_task.id})
+        self.assertEqual(manager_ids, {self.finance_task.id})
+        self.assertEqual(super_admin_ids, {self.general_task.id, self.finance_task.id})
 
 
 if __name__ == "__main__":

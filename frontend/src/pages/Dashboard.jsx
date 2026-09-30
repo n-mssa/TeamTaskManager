@@ -10,6 +10,7 @@ export default function Dashboard({ user, openTask, createTask }) {
   const [status, setStatus] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
   const [error, setError] = useState('')
+  const isAdmin = ['super_admin', 'admin'].includes(user?.role)
 
   async function load() {
     const params = new URLSearchParams()
@@ -86,8 +87,8 @@ export default function Dashboard({ user, openTask, createTask }) {
     <section>
       <div className="page-head">
         <div>
-          <p className="eyebrow">{user.role === 'admin' ? 'كل الأقسام' : 'قسمك فقط'}</p>
-          <h1>{user.role === 'admin' ? 'لوحة الإدارة' : 'لوحة القسم'}</h1>
+          <p className="eyebrow">{isAdmin ? 'كل الأقسام المتاحة' : 'قسمك فقط'}</p>
+          <h1>{isAdmin ? 'لوحة الإدارة' : 'لوحة القسم'}</h1>
         </div>
         <button className="primary" onClick={createTask}>إنشاء مهمة</button>
       </div>

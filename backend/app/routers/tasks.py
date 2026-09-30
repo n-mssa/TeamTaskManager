@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Department, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
-from ..permissions import assert_can_manage_task_payload, get_visible_task_or_403, require_manager_or_admin
+from ..permissions import MANAGEMENT_ROLES, assert_can_manage_task_payload, get_visible_task_or_403, require_manager_or_admin
 from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, CommentUpdate, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
 from ..services.storage import delete_objects, download_object, upload_object
 
@@ -34,6 +34,8 @@ def visible_task_query(db: Session, user: User):
         query = query.filter(Task.assigned_to_user_id == user.id)
     elif user.role == UserRole.manager:
         query = query.filter(Task.department_id == user.department_id)
+    elif user.role == UserRole.admin:
+        query = query.filter(~Task.department.has(Department.is_restricted.is_(True)))
     return query
 
 
@@ -137,7 +139,8 @@ def notify_expected_time_complaint(db: Session, task: Task):
     recipients = set()
     if task.department and task.department.manager_id:
         recipients.add(task.department.manager_id)
-    admin_ids = [row[0] for row in db.query(User.id).filter(User.role == UserRole.admin, User.is_active.is_(True)).all()]
+    admin_roles = [UserRole.super_admin] if task.department and task.department.is_restricted else [UserRole.super_admin, UserRole.admin]
+    admin_ids = [row[0] for row in db.query(User.id).filter(User.role.in_(admin_roles), User.is_active.is_(True)).all()]
     recipients.update(admin_ids)
     recipients.discard(task.assigned_to_user_id)
     for user_id in recipients:
@@ -157,7 +160,8 @@ def notify_self_created_task(db: Session, task: Task):
     department = task.department or db.query(Department).filter(Department.id == task.department_id).first()
     if department and department.manager_id:
         recipients.add(department.manager_id)
-    admin_ids = [row[0] for row in db.query(User.id).filter(User.role == UserRole.admin, User.is_active.is_(True)).all()]
+    admin_roles = [UserRole.super_admin] if department and department.is_restricted else [UserRole.super_admin, UserRole.admin]
+    admin_ids = [row[0] for row in db.query(User.id).filter(User.role.in_(admin_roles), User.is_active.is_(True)).all()]
     recipients.update(admin_ids)
     recipients.discard(task.assigned_to_user_id)
     for user_id in recipients:
@@ -190,7 +194,7 @@ def create_task_record(payload: TaskCreate, db: Session, current_user: User):
     assignee = db.query(User).filter(User.id == payload.assigned_to_user_id).first()
     if not assignee or not assignee.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee must be an active user")
-    assert_can_manage_task_payload(current_user, payload.department_id, assignee)
+    assert_can_manage_task_payload(db, current_user, payload.department_id, assignee)
     validate_status_reasons(
         None,
         payload.status,
@@ -365,7 +369,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     assignee = db.query(User).filter(User.id == next_assignee_id).first()
     if not assignee:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assignee not found")
-    assert_can_manage_task_payload(current_user, next_department, assignee)
+    assert_can_manage_task_payload(db, current_user, next_department, assignee)
     next_status = data.get("status", task.status)
     previous_assignee_id = task.assigned_to_user_id
     validate_status_transition(task, next_status)
@@ -392,7 +396,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
 @router.patch("/{task_id}/self-created-approval", response_model=TaskOut)
 def review_self_created_task(task_id: int, payload: SelfCreatedApprovalUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = get_visible_task_or_403(db, task_id, current_user)
-    if current_user.role not in {UserRole.admin, UserRole.manager}:
+    if current_user.role not in MANAGEMENT_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
     if task.created_by_user_id != task.assigned_to_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only employee-created tasks require this approval")
@@ -475,7 +479,7 @@ def update_status(task_id: int, payload: TaskStatusUpdate, db: Session = Depends
 @router.patch("/{task_id}/expected-time-review", response_model=TaskOut)
 def review_expected_time(task_id: int, payload: ExpectedTimeReviewUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = get_visible_task_or_403(db, task_id, current_user)
-    if current_user.role not in {UserRole.admin, UserRole.manager}:
+    if current_user.role not in MANAGEMENT_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
     if not task.expected_time_complaint_text:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No expected time complaint to review")
@@ -496,7 +500,7 @@ def review_expected_time(task_id: int, payload: ExpectedTimeReviewUpdate, db: Se
 @router.patch("/{task_id}/delay-review", response_model=TaskOut)
 def review_delay_reason(task_id: int, payload: DelayReviewUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = get_visible_task_or_403(db, task_id, current_user)
-    if current_user.role not in {UserRole.admin, UserRole.manager}:
+    if current_user.role not in MANAGEMENT_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
     task.overrun_reason_category = payload.overrun_reason_category
     task.overrun_reason_approved = payload.overrun_reason_approved
@@ -508,7 +512,7 @@ def review_delay_reason(task_id: int, payload: DelayReviewUpdate, db: Session = 
 @router.patch("/{task_id}/production-issue", response_model=TaskOut)
 def update_production_issue(task_id: int, payload: ProductionIssueUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = get_visible_task_or_403(db, task_id, current_user)
-    if current_user.role not in {UserRole.admin, UserRole.manager}:
+    if current_user.role not in MANAGEMENT_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin only")
     if task.status != TaskStatus.done:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Production issues can be flagged only after task is done")
@@ -575,7 +579,7 @@ def get_visible_comment_or_403(db: Session, task_id: int, comment_id: int, curre
     )
     if not comment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
-    if comment.user_id != current_user.id and current_user.role not in {UserRole.admin, UserRole.manager}:
+    if comment.user_id != current_user.id and current_user.role not in MANAGEMENT_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can edit/delete only your own comments")
     return comment
 

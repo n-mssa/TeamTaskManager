@@ -15,6 +15,7 @@ export const priorityLabels = {
 }
 
 export const roleLabels = {
+  super_admin: 'مدير النظام الأعلى',
   admin: 'مدير النظام',
   manager: 'مدير / قائد فريق',
   employee: 'موظف',

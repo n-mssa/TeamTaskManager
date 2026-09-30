@@ -19,8 +19,8 @@ export default function Reports({ user, openTask, executive = false }) {
   const [userId, setUserId] = useState('')
   const [users, setUsers] = useState([])
   const [report, setReport] = useState(null)
-  const canFilterUsers = user?.role === 'admin' || user?.role === 'manager'
-  const canViewExecutiveReport = user?.role === 'admin' && String(user?.username || '').toLowerCase() === 'admin'
+  const canFilterUsers = ['super_admin', 'admin', 'manager'].includes(user?.role)
+  const canViewExecutiveReport = user?.role === 'super_admin'
   const displayedReport = useMemo(() => filterReportByUser(report, userId), [report, userId])
   const reportRangeTitle = displayedReport ? `تقرير من ${formatDateOnly(displayedReport.start_date)} إلى ${formatDateOnly(displayedReport.end_date)}` : (executive ? 'تقرير الإدارة التنفيذي' : 'التقارير')
   const generatedAt = useMemo(() => new Date(), [displayedReport?.start_date, displayedReport?.end_date, userId])

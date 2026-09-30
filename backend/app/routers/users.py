@@ -3,11 +3,35 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, hash_password
 from ..database import get_db
-from ..models import Task, User
-from ..permissions import require_admin
+from ..models import Department, Task, User, UserRole
+from ..permissions import is_super_admin, require_admin
 from ..schemas import PasswordReset, ThemePreference, UserCreate, UserOut, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def assert_admin_can_manage_user(db: Session, current_user: User, user: User):
+    if is_super_admin(current_user):
+        return
+    if user.role == UserRole.super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin accounts can only be managed by a super admin")
+    if user.department_id:
+        department = db.query(Department).filter(Department.id == user.department_id).first()
+        if department and department.is_restricted:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This user belongs to a restricted department")
+
+
+def assert_admin_payload_allowed(db: Session, current_user: User, role: UserRole | None, department_id: int | None):
+    if is_super_admin(current_user):
+        return
+    if role == UserRole.super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only a super admin can grant super admin access")
+    if department_id:
+        department = db.query(Department).filter(Department.id == department_id).first()
+        if not department:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Department not found")
+        if department.is_restricted:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This department is restricted")
 
 
 @router.get("", response_model=list[UserOut])
@@ -17,6 +41,11 @@ def list_users(active_only: bool = False, db: Session = Depends(get_db), current
     query = db.query(User)
     if current_user.role.value == "manager":
         query = query.filter(User.department_id == current_user.department_id)
+    elif current_user.role == UserRole.admin:
+        query = query.filter(
+            User.role != UserRole.super_admin,
+            ~User.department.has(Department.is_restricted.is_(True)),
+        )
     if active_only:
         query = query.filter(User.is_active.is_(True))
     return query.order_by(User.full_name_ar).all()
@@ -25,6 +54,7 @@ def list_users(active_only: bool = False, db: Session = Depends(get_db), current
 @router.post("", response_model=UserOut)
 def create_user(payload: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_admin(current_user)
+    assert_admin_payload_allowed(db, current_user, payload.role, payload.department_id)
     if db.query(User).filter(User.username == payload.username).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
     user = User(**payload.model_dump(exclude={"password"}), password_hash=hash_password(payload.password))
@@ -51,6 +81,8 @@ def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = D
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if current_user.role.value == "manager" and user.department_id != current_user.department_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if current_user.role == UserRole.admin:
+        assert_admin_can_manage_user(db, current_user, user)
     return user
 
 
@@ -60,7 +92,9 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    assert_admin_can_manage_user(db, current_user, user)
     data = payload.model_dump(exclude_unset=True)
+    assert_admin_payload_allowed(db, current_user, data.get("role", user.role), data.get("department_id", user.department_id))
     if "username" in data and db.query(User).filter(User.username == data["username"], User.id != user_id).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
     if user_id == current_user.id and (data.get("role") not in {None, current_user.role} or data.get("is_active") is False):
@@ -87,6 +121,7 @@ def deactivate_user(user_id: int, db: Session = Depends(get_db), current_user: U
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    assert_admin_can_manage_user(db, current_user, user)
     user.is_active = False
     db.commit()
     db.refresh(user)
@@ -99,6 +134,7 @@ def reset_password(user_id: int, payload: PasswordReset, db: Session = Depends(g
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    assert_admin_can_manage_user(db, current_user, user)
     user.password_hash = hash_password(payload.password)
     db.commit()
     db.refresh(user)

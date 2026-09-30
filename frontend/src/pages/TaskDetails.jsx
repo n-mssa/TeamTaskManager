@@ -137,8 +137,8 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   }
 
   if (!task) return <div className="empty">جار التحميل...</div>
-  const canReviewDelay = user.role === 'admin' || user.role === 'manager'
-  const canDeleteTask = user.role === 'admin' || user.role === 'manager'
+  const canReviewDelay = ['super_admin', 'admin', 'manager'].includes(user.role)
+  const canDeleteTask = ['super_admin', 'admin', 'manager'].includes(user.role)
   const canFlagProductionIssue = canReviewDelay && task.status === 'done'
   const isEmployeeSelfCreated = task.created_by_user_id === task.assigned_to_user_id && task.assignee?.role === 'employee'
   return (
@@ -282,7 +282,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
 
 function canManageComment(user, comment) {
   if (!user || !comment) return false
-  return comment.user_id === user.id || user.role === 'admin' || user.role === 'manager'
+  return comment.user_id === user.id || ['super_admin', 'admin', 'manager'].includes(user.role)
 }
 
 function formatDateTime(value) {

@@ -29,6 +29,10 @@ USER_COLUMNS = {
     "theme_id": "VARCHAR(32) NOT NULL DEFAULT 'light'",
 }
 
+DEPARTMENT_COLUMNS = {
+    "is_restricted": "BOOLEAN NOT NULL DEFAULT FALSE",
+}
+
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_tasks_assignee_active_due ON tasks (assigned_to_user_id, due_date) WHERE deleted_at IS NULL",
     "CREATE INDEX IF NOT EXISTS ix_tasks_department_active_due ON tasks (department_id, due_date) WHERE deleted_at IS NULL",
@@ -60,11 +64,24 @@ def add_column_if_missing(connection, table_name: str, column_name: str, definit
 
 
 def apply_migrations():
+    if engine.dialect.name == "postgresql":
+        # PostgreSQL requires a newly added enum value to be committed before use.
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin'"))
+
     with engine.begin() as connection:
         for column, definition in TASK_COLUMNS.items():
             add_column_if_missing(connection, "tasks", column, definition)
         for column, definition in USER_COLUMNS.items():
             add_column_if_missing(connection, "users", column, definition)
+        for column, definition in DEPARTMENT_COLUMNS.items():
+            add_column_if_missing(connection, "departments", column, definition)
+        connection.execute(
+            text(
+                "UPDATE users SET role = 'super_admin' "
+                "WHERE LOWER(username) = 'admin' AND role = 'admin'"
+            )
+        )
         connection.execute(
             text(
                 "UPDATE tasks SET timer_started_at = CURRENT_TIMESTAMP "

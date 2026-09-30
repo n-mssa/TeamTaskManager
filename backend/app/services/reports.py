@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import Task, TaskComment, TaskStatus, User, UserRole
+from ..models import Department, Task, TaskComment, TaskStatus, User, UserRole
 
 
 DELAY_CATEGORY_COEFFICIENTS = {
@@ -31,6 +31,11 @@ def allowed_report_users_query(db: Session, current_user: User):
         query = query.filter(User.id == current_user.id)
     elif current_role == UserRole.manager.value:
         query = query.filter(User.department_id == current_user.department_id)
+    elif current_role == UserRole.admin.value:
+        query = query.filter(
+            User.role != UserRole.super_admin,
+            ~User.department.has(Department.is_restricted.is_(True)),
+        )
     return query
 
 
@@ -41,6 +46,10 @@ def scoped_tasks(db: Session, current_user: User, department_id: int | None = No
         query = query.filter(Task.assigned_to_user_id == current_user.id)
     elif current_role == UserRole.manager.value:
         query = query.filter(Task.department_id == current_user.department_id)
+    elif current_role == UserRole.admin.value:
+        query = query.filter(~Task.department.has(Department.is_restricted.is_(True)))
+        if department_id:
+            query = query.filter(Task.department_id == department_id)
     elif department_id:
         query = query.filter(Task.department_id == department_id)
     if user_id:
