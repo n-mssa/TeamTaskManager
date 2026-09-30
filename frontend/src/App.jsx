@@ -417,7 +417,7 @@ export default function App() {
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
           {route === 'executive-report' && <Reports user={user} openTask={openTask} executive />}
           {route === 'kpi' && <Kpi user={user} openTask={openTask} />}
-          {route === 'users' && <Users currentUser={user} />}
+          {route === 'users' && <Users />}
           {route === 'departments' && <Departments user={user} />}
           {route === 'delay-reasons' && <DelayReasons />}
         </div>

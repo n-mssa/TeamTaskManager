@@ -78,8 +78,8 @@ def apply_migrations():
             add_column_if_missing(connection, "departments", column, definition)
         connection.execute(
             text(
-                "UPDATE users SET role = 'super_admin' "
-                "WHERE LOWER(username) = 'admin' AND role = 'admin'"
+                "UPDATE users SET role = 'admin' "
+                "WHERE role = 'super_admin' AND LOWER(username) <> 'superadmin'"
             )
         )
         connection.execute(

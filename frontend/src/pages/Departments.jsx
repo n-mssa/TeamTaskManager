@@ -4,7 +4,7 @@ import { api } from '../api/client'
 export default function Departments({ user }) {
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
-  const [form, setForm] = useState({ name_ar: '', name_en: '', manager_id: '', is_restricted: false })
+  const [form, setForm] = useState({ name_ar: '', name_en: '', is_restricted: false })
   const isSuperAdmin = user?.role === 'super_admin'
 
   async function load() {
@@ -19,9 +19,9 @@ export default function Departments({ user }) {
     event.preventDefault()
     await api('/departments', {
       method: 'POST',
-      body: JSON.stringify({ name_ar: form.name_ar, name_en: form.name_en || null, manager_id: form.manager_id ? Number(form.manager_id) : null, is_restricted: isSuperAdmin && form.is_restricted }),
+      body: JSON.stringify({ name_ar: form.name_ar, name_en: form.name_en || null, manager_id: null, is_restricted: isSuperAdmin && form.is_restricted }),
     })
-    setForm({ name_ar: '', name_en: '', manager_id: '', is_restricted: false })
+    setForm({ name_ar: '', name_en: '', is_restricted: false })
     load()
   }
 
@@ -31,8 +31,8 @@ export default function Departments({ user }) {
       <form className="form-grid" onSubmit={submit}>
         <label>اسم القسم بالعربية<input required value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} /></label>
         <label>اسم القسم بالإنجليزية<input value={form.name_en} onChange={(e) => setForm({ ...form, name_en: e.target.value })} /></label>
-        <label>المدير<select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}><option value="">بدون</option>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name_ar}</option>)}</select></label>
         {isSuperAdmin && <label className="toggle-label"><input type="checkbox" checked={form.is_restricted} onChange={(e) => setForm({ ...form, is_restricted: e.target.checked })} /> قسم محمي (للمدير والسوبر أدمن فقط)</label>}
+        <p className="note">أنشئ القسم أولاً، ثم أنشئ مستخدماً بدور مدير واختر هذا القسم. سيتم ربطه كمدير القسم تلقائياً.</p>
         <button className="primary">إنشاء قسم</button>
       </form>
       <div className="table-wrap"><table><thead><tr><th>القسم</th><th>الاسم بالإنجليزية</th><th>المدير</th>{isSuperAdmin && <th>الخصوصية</th>}</tr></thead>

@@ -3,7 +3,7 @@ import { KeyRound, Pencil, X } from 'lucide-react'
 import { api } from '../api/client'
 import { roleLabels } from '../utils/labels'
 
-export default function Users({ currentUser }) {
+export default function Users() {
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
   const [form, setForm] = useState({ username: '', password: '', full_name_ar: '', role: 'employee', department_id: '', is_active: true })
@@ -11,7 +11,7 @@ export default function Users({ currentUser }) {
   const [editing, setEditing] = useState(null)
   const [passwordUser, setPasswordUser] = useState(null)
   const [newPassword, setNewPassword] = useState('')
-  const availableRoleLabels = Object.entries(roleLabels).filter(([value]) => currentUser?.role === 'super_admin' || value !== 'super_admin')
+  const availableRoleLabels = Object.entries(roleLabels).filter(([value]) => value !== 'super_admin')
 
   async function load() {
     const [nextUsers, nextDepartments] = await Promise.all([api('/users'), api('/departments')])
@@ -96,14 +96,14 @@ export default function Users({ currentUser }) {
       <div className="table-wrap"><table><thead><tr><th>اسم المستخدم</th><th>الاسم العربي</th><th>الدور</th><th>القسم</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
         <tbody>{users.map((user) => <tr key={user.id}><td>{user.username}</td><td>{user.full_name_ar}</td><td>{roleLabels[user.role]}</td><td>{departments.find((d) => d.id === user.department_id)?.name_ar || '-'}</td><td><span className={`badge ${user.is_active ? 'status-done' : 'status-cancelled'}`}>{user.is_active ? 'فعال' : 'غير فعال'}</span></td><td><div className="row-actions"><button onClick={() => { setError(''); setEditing({ ...user, department_id: user.department_id || '' }) }}><Pencil size={15} /> تعديل</button><button onClick={() => { setError(''); setPasswordUser(user); setNewPassword('') }}><KeyRound size={15} /> كلمة المرور</button>{user.is_active && <button className="danger-subtle" onClick={() => deactivate(user.id)}>تعطيل</button>}</div></td></tr>)}</tbody>
       </table></div>
-      {editing && <UserEditModal user={editing} currentUser={currentUser} departments={departments} error={error} onChange={setEditing} onClose={() => setEditing(null)} onSubmit={saveUser} />}
+      {editing && <UserEditModal user={editing} departments={departments} error={error} onChange={setEditing} onClose={() => setEditing(null)} onSubmit={saveUser} />}
       {passwordUser && <PasswordModal user={passwordUser} password={newPassword} error={error} setPassword={setNewPassword} onClose={() => { setPasswordUser(null); setNewPassword('') }} onSubmit={resetPassword} />}
     </section>
   )
 }
 
-function UserEditModal({ user, currentUser, departments, error, onChange, onClose, onSubmit }) {
-  const availableRoleLabels = Object.entries(roleLabels).filter(([value]) => currentUser?.role === 'super_admin' || value !== 'super_admin')
+function UserEditModal({ user, departments, error, onChange, onClose, onSubmit }) {
+  const availableRoleLabels = Object.entries(roleLabels).filter(([value]) => value !== 'super_admin' || user.role === 'super_admin')
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <form className="briefing-modal user-modal" onSubmit={onSubmit} onClick={(event) => event.stopPropagation()}>

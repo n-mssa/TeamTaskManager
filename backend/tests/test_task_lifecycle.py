@@ -10,6 +10,7 @@ from app.database import Base
 from app.models import Department, Task, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
+from app.routers.users import sync_department_manager
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 
 
@@ -167,6 +168,20 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(admin_ids, {self.general_task.id})
         self.assertEqual(manager_ids, {self.finance_task.id})
         self.assertEqual(super_admin_ids, {self.general_task.id, self.finance_task.id})
+
+    def test_manager_role_automatically_links_and_moves_department_manager(self):
+        self.finance.manager_id = None
+        sync_department_manager(self.db, self.finance_manager)
+        self.db.flush()
+        self.assertEqual(self.finance.manager_id, self.finance_manager.id)
+
+        self.finance_manager.department_id = self.general.id
+        sync_department_manager(self.db, self.finance_manager)
+        self.db.flush()
+        self.db.refresh(self.finance)
+        self.db.refresh(self.general)
+        self.assertIsNone(self.finance.manager_id)
+        self.assertEqual(self.general.manager_id, self.finance_manager.id)
 
 
 if __name__ == "__main__":
