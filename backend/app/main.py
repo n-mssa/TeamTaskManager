@@ -7,7 +7,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .database import Base, engine
 from .migrations import apply_migrations
-from .routers import auth, delay_reasons, departments, notifications, reports, tasks, users
+from .routers import auth, delay_reasons, departments, notifications, recurring_tasks, reports, tasks, users
+from .services.recurring_tasks import start_recurring_scheduler, stop_recurring_scheduler
 from .services.storage import check_storage, storage_config_status
 
 load_dotenv()
@@ -30,6 +31,12 @@ app.add_middleware(
 def create_tables():
     Base.metadata.create_all(bind=engine)
     apply_migrations()
+    start_recurring_scheduler()
+
+
+@app.on_event("shutdown")
+def stop_schedulers():
+    stop_recurring_scheduler()
 
 
 @app.get("/health")
@@ -54,3 +61,4 @@ app.include_router(tasks.router)
 app.include_router(delay_reasons.router)
 app.include_router(reports.router)
 app.include_router(notifications.router)
+app.include_router(recurring_tasks.router)

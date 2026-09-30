@@ -585,6 +585,57 @@ small,
   margin: 0;
 }
 
+.recurrence-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.recurrence-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recurrence-panel-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.recurrence-panel-head small,
+.recurrence-panel label small {
+  color: var(--muted);
+}
+
+.recurrence-panel select {
+  width: min(280px, 100%);
+}
+
+.recurrence-panel label {
+  max-width: 360px;
+}
+
+.recurring-template-list {
+  margin-top: 18px;
+}
+
+.eod-overdue-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 7px;
+  padding: 4px 8px;
+  color: #b42318;
+  background: #fff1f0;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .briefing-head h2 {
   margin: 0;
   font-size: 22px;
@@ -1577,6 +1628,11 @@ th {
 
   .toggle-label {
     grid-column: span 1;
+  }
+
+  .recurrence-panel-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

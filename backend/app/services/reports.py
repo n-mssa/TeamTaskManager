@@ -71,7 +71,7 @@ def is_expected_time_complaint_accepted(task: Task):
 
 
 def is_effectively_over_expected(task: Task):
-    return task.is_over_expected and not is_expected_time_complaint_accepted(task)
+    return (task.is_over_expected or task.is_eod_overdue) and not is_expected_time_complaint_accepted(task)
 
 
 def attributable_delay_hours_for_task(task: Task):

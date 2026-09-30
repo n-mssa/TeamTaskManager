@@ -1,5 +1,5 @@
 import { priorityLabels, statusLabels } from '../utils/labels'
-import { isOverExpected } from '../utils/tasks'
+import { isEndOfDayOverdue, isOverExpected } from '../utils/tasks'
 import EmptyState from './EmptyState'
 
 export default function TaskTable({ tasks, onOpen, onStatus }) {
@@ -21,7 +21,7 @@ export default function TaskTable({ tasks, onOpen, onStatus }) {
         </thead>
         <tbody>
           {tasks.map((task) => {
-            const overdue = isOverExpected(task) && !['done', 'cancelled'].includes(task.status)
+            const overdue = (isOverExpected(task) || isEndOfDayOverdue(task)) && !['done', 'cancelled'].includes(task.status)
             return (
               <tr key={task.id} className={overdue ? 'overdue-row' : ''}>
                 <td>

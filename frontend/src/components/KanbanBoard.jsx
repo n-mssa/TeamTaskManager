@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Clock, CalendarDays, GripVertical } from 'lucide-react'
 import { api } from '../api/client'
 import { boardColumns, priorityLabels } from '../utils/labels'
-import { elapsedSeconds, formatDuration, isOverExpected } from '../utils/tasks'
+import { elapsedSeconds, formatDuration, isEndOfDayOverdue, isOverExpected } from '../utils/tasks'
 import EmptyState from './EmptyState'
 
 export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) {
@@ -375,12 +375,14 @@ function CompletionComplaintModal({ task, onCancel, onFinish }) {
 function TaskCard({ task, onOpen, onDragStart }) {
   const worked = elapsedSeconds(task)
   const overExpected = isOverExpected(task)
+  const missedEndOfDay = isEndOfDayOverdue(task)
+  const visuallyOverdue = overExpected || missedEndOfDay
   const progress = Math.min(100, Math.round((worked / (task.expected_minutes * 60)) * 100))
   const pendingSelfApproval = task.created_by_user_id === task.assigned_to_user_id && task.self_created_approved === false
   const pausedTooLong = isPausedTooLong(task)
   return (
     <article
-      className={`task-card ${overExpected ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''}`}
+      className={`task-card ${visuallyOverdue ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''}`}
       draggable
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
@@ -402,6 +404,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
         </span>
       </div>
       {pendingSelfApproval && <span className="approval-badge">بانتظار الاعتماد</span>}
+      {missedEndOfDay && <span className="eod-overdue-badge">لم تُنجز قبل نهاية اليوم</span>}
       <h3>{task.title}</h3>
       {task.description && <p>{task.description}</p>}
       <div className="task-meta">

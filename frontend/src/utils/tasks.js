@@ -18,6 +18,24 @@ export function isOverExpected(task) {
   return elapsedSeconds(task) > task.expected_minutes * 60
 }
 
+export function isEndOfDayOverdue(task) {
+  if (task.is_eod_overdue) return true
+  if (task.recurrence_frequency !== 'daily' || !task.recurrence_date || ['done', 'cancelled'].includes(task.status)) return false
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Amman',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date()).reduce((current, part) => {
+    current[part.type] = part.value
+    return current
+  }, {})
+  const currentDate = `${parts.year}-${parts.month}-${parts.day}`
+  return currentDate > task.recurrence_date || (currentDate === task.recurrence_date && Number(parts.hour) >= 17)
+}
+
 export function remainingExpectedSeconds(task) {
   return task.expected_minutes * 60 - elapsedSeconds(task)
 }

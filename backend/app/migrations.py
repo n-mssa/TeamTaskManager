@@ -23,6 +23,9 @@ TASK_COLUMNS = {
     "deleted_at": "TIMESTAMP WITH TIME ZONE",
     "deleted_by_user_id": "INTEGER REFERENCES users(id)",
     "deletion_reason": "TEXT",
+    "recurring_template_id": "INTEGER REFERENCES recurring_task_templates(id)",
+    "recurrence_date": "DATE",
+    "recurrence_frequency": "VARCHAR(16)",
 }
 
 USER_COLUMNS = {
@@ -31,6 +34,7 @@ USER_COLUMNS = {
 
 DEPARTMENT_COLUMNS = {
     "is_restricted": "BOOLEAN NOT NULL DEFAULT FALSE",
+    "recurring_tasks_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
 }
 
 INDEXES = [
@@ -42,6 +46,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_task_history_task_changed ON task_status_history (task_id, changed_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_task_attachments_task_created ON task_attachments (task_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_notifications_user_read_created ON notifications (user_id, read_at, created_at DESC)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_task_recurring_occurrence ON tasks (recurring_template_id, recurrence_date) WHERE recurring_template_id IS NOT NULL",
 ]
 
 
@@ -76,6 +81,12 @@ def apply_migrations():
             add_column_if_missing(connection, "users", column, definition)
         for column, definition in DEPARTMENT_COLUMNS.items():
             add_column_if_missing(connection, "departments", column, definition)
+        connection.execute(
+            text(
+                "UPDATE departments SET recurring_tasks_enabled = TRUE "
+                "WHERE LOWER(COALESCE(name_en, '')) = 'finance' OR name_ar = 'المالية'"
+            )
+        )
         connection.execute(
             text(
                 "UPDATE users SET role = 'admin' "

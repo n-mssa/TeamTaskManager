@@ -5,6 +5,11 @@ import { priorityOptions } from '../utils/labels'
 const maxAttachments = 3
 const maxAttachmentBytes = 10 * 1024 * 1024
 
+function localDateValue() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 function formatTimePart(value) {
   return String(Number(value || 0)).padStart(2, '0')
 }
@@ -21,6 +26,8 @@ const emptyTask = {
   manager_notes: '',
   hold_reason_text: '',
   overrun_reason_text: '',
+  recurrence_frequency: 'none',
+  recurrence_start_date: localDateValue(),
 }
 
 export default function TaskForm({ taskId, onSaved, user }) {
@@ -29,6 +36,7 @@ export default function TaskForm({ taskId, onSaved, user }) {
   const [departments, setDepartments] = useState([])
   const [delayReasons, setDelayReasons] = useState([])
   const [attachments, setAttachments] = useState([])
+  const [recurringTemplates, setRecurringTemplates] = useState([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const filteredUsers = useMemo(() => {
@@ -36,6 +44,13 @@ export default function TaskForm({ taskId, onSaved, user }) {
     if (!form.department_id) return []
     return users.filter((item) => String(item.department_id || '') === String(form.department_id))
   }, [form.department_id, user, users])
+  const selectedDepartment = useMemo(
+    () => departments.find((item) => String(item.id) === String(form.department_id)),
+    [departments, form.department_id],
+  )
+  const canCreateRecurring = !taskId
+    && selectedDepartment?.recurring_tasks_enabled
+    && (user?.role === 'super_admin' || user?.role === 'manager')
 
   useEffect(() => {
     const requests = [
@@ -73,6 +88,17 @@ export default function TaskForm({ taskId, onSaved, user }) {
     const assigneeStillAvailable = filteredUsers.some((item) => String(item.id) === String(form.assigned_to_user_id))
     if (!assigneeStillAvailable) setValue('assigned_to_user_id', '')
   }, [filteredUsers, form.assigned_to_user_id])
+
+  useEffect(() => {
+    if (!canCreateRecurring) {
+      setRecurringTemplates([])
+      if (form.recurrence_frequency !== 'none') setValue('recurrence_frequency', 'none')
+      return
+    }
+    api('/recurring-tasks')
+      .then((items) => setRecurringTemplates(items.filter((item) => String(item.department_id) === String(form.department_id))))
+      .catch(() => setRecurringTemplates([]))
+  }, [canCreateRecurring, form.department_id])
 
   function setValue(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -145,6 +171,18 @@ export default function TaskForm({ taskId, onSaved, user }) {
     }
     if (!taskId) payload.status = 'pending'
     try {
+      if (!taskId && form.recurrence_frequency !== 'none') {
+        await api('/recurring-tasks', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...payload,
+            frequency: form.recurrence_frequency,
+            start_date: form.recurrence_start_date,
+          }),
+        })
+        onSaved()
+        return
+      }
       if (!taskId && attachments.length) {
         const formData = new FormData()
         appendPayload(formData, payload)
@@ -165,6 +203,19 @@ export default function TaskForm({ taskId, onSaved, user }) {
       setError(err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function toggleRecurringTemplate(template) {
+    setError('')
+    try {
+      const updated = await api(`/recurring-tasks/${template.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !template.is_active }),
+      })
+      setRecurringTemplates((current) => current.map((item) => item.id === updated.id ? updated : item))
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -202,6 +253,24 @@ export default function TaskForm({ taskId, onSaved, user }) {
           </div>
           <small>دقائق : ساعات</small>
         </label>
+        {canCreateRecurring && (
+          <div className="recurrence-panel span-2">
+            <div className="recurrence-panel-head">
+              <div><strong>تكرار مهمة المالية</strong><small>يتم إنشاء المهمة تلقائياً الساعة 8:00 صباحاً بتوقيت عمّان.</small></div>
+              <select value={form.recurrence_frequency} onChange={(e) => setValue('recurrence_frequency', e.target.value)}>
+                <option value="none">مرة واحدة فقط</option>
+                <option value="daily">يومياً ما عدا الجمعة</option>
+                <option value="monthly">شهرياً</option>
+              </select>
+            </div>
+            {form.recurrence_frequency !== 'none' && (
+              <label>تاريخ أول إضافة
+                <input type="date" required min={localDateValue()} value={form.recurrence_start_date} onChange={(e) => setValue('recurrence_start_date', e.target.value)} />
+                <small>{form.recurrence_frequency === 'monthly' ? 'سيتم التكرار في نفس رقم اليوم من كل شهر.' : 'لن تُنشأ مهام أيام الجمعة.'}</small>
+              </label>
+            )}
+          </div>
+        )}
         <label className="span-2">الوصف<textarea value={form.description || ''} onChange={(e) => setValue('description', e.target.value)} /></label>
         {taskId && <>
           <label>سبب التأخير<select value={form.delay_reason_id || ''} onChange={(e) => setValue('delay_reason_id', e.target.value)}>
@@ -213,7 +282,7 @@ export default function TaskForm({ taskId, onSaved, user }) {
         {taskId && <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>}
         {user?.role !== 'employee' && <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>}
         {user?.role === 'employee' && !taskId && <p className="note span-2">ستظهر هذه المهمة عندك مباشرة، لكنها لن تُحتسب في مؤشرات الأداء حتى يعتمدها المدير.</p>}
-        {!taskId && (
+        {!taskId && form.recurrence_frequency === 'none' && (
           <label className="span-2 file-upload">
             المرفقات
             <input type="file" multiple onChange={chooseAttachments} />
@@ -224,6 +293,14 @@ export default function TaskForm({ taskId, onSaved, user }) {
         {error && <p className="error span-2">{error}</p>}
         <button className="primary span-2" disabled={saving}>{saving ? 'جار الحفظ...' : 'حفظ'}</button>
       </form>
+      {canCreateRecurring && recurringTemplates.length > 0 && (
+        <article className="panel recurring-template-list">
+          <h2>المهام الدورية للقسم</h2>
+          <div className="table-wrap"><table><thead><tr><th>المهمة</th><th>المكلف</th><th>التكرار</th><th>تاريخ البداية</th><th>الحالة</th><th>الإجراء</th></tr></thead>
+            <tbody>{recurringTemplates.map((template) => <tr key={template.id}><td>{template.title}</td><td>{template.assignee?.full_name_ar || '-'}</td><td>{template.frequency === 'daily' ? 'يومي ما عدا الجمعة' : `شهري - يوم ${template.monthly_day}`}</td><td>{template.start_date}</td><td><span className={`badge ${template.is_active ? 'status-done' : 'status-cancelled'}`}>{template.is_active ? 'فعال' : 'متوقف'}</span></td><td><button type="button" onClick={() => toggleRecurringTemplate(template)}>{template.is_active ? 'إيقاف التكرار' : 'إعادة التفعيل'}</button></td></tr>)}</tbody>
+          </table></div>
+        </article>
+      )}
     </section>
   )
 }

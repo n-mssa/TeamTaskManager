@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Enum as SQLEnum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -45,6 +45,7 @@ class Department(Base):
     name_en = Column(String(160), nullable=True)
     manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_restricted = Column(Boolean, default=False, nullable=False)
+    recurring_tasks_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -83,8 +84,34 @@ class DelayReason(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
 
+class RecurringTaskTemplate(Base):
+    __tablename__ = "recurring_task_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(220), nullable=False)
+    description = Column(Text, nullable=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    priority = Column(SQLEnum(TaskPriority), nullable=False, default=TaskPriority.normal)
+    expected_minutes = Column(Integer, nullable=False)
+    manager_notes = Column(Text, nullable=True)
+    frequency = Column(String(16), nullable=False)
+    start_date = Column(Date, nullable=False)
+    monthly_day = Column(Integer, nullable=True)
+    generation_hour = Column(Integer, nullable=False, default=8)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    department = relationship("Department")
+    assignee = relationship("User", foreign_keys=[assigned_to_user_id])
+    creator = relationship("User", foreign_keys=[created_by_user_id])
+
+
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (UniqueConstraint("recurring_template_id", "recurrence_date", name="uq_task_recurring_occurrence"),)
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(220), nullable=False)
@@ -117,6 +144,9 @@ class Task(Base):
     self_created_approved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     self_created_approved_at = Column(DateTime(timezone=True), nullable=True)
     manager_notes = Column(Text, nullable=True)
+    recurring_template_id = Column(Integer, ForeignKey("recurring_task_templates.id"), nullable=True)
+    recurrence_date = Column(Date, nullable=True)
+    recurrence_frequency = Column(String(16), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     deletion_reason = Column(Text, nullable=True)
@@ -133,6 +163,7 @@ class Task(Base):
     comments = relationship("TaskComment", back_populates="task", cascade="all, delete-orphan")
     history = relationship("TaskStatusHistory", back_populates="task", cascade="all, delete-orphan")
     attachments = relationship("TaskAttachment", back_populates="task", cascade="all, delete-orphan")
+    recurring_template = relationship("RecurringTaskTemplate")
 
     @property
     def elapsed_seconds(self):
@@ -145,6 +176,17 @@ class Task(Base):
     @property
     def is_over_expected(self):
         return self.elapsed_seconds > self.expected_minutes * 60
+
+    @property
+    def is_eod_overdue(self):
+        if self.recurrence_frequency != "daily" or not self.recurrence_date:
+            return False
+        if self.status in {TaskStatus.done, TaskStatus.cancelled}:
+            return False
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(ZoneInfo("Asia/Amman"))
+        return now.date() > self.recurrence_date or (now.date() == self.recurrence_date and now.hour >= 17)
 
 
 class TaskComment(Base):

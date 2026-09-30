@@ -34,6 +34,7 @@ class DepartmentUpdate(DepartmentBase):
 class DepartmentOut(DepartmentBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    recurring_tasks_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -197,6 +198,10 @@ class TaskOut(TaskBase):
     work_seconds: int
     elapsed_seconds: int
     is_over_expected: bool
+    is_eod_overdue: bool = False
+    recurring_template_id: Optional[int] = None
+    recurrence_date: Optional[date] = None
+    recurrence_frequency: Optional[str] = None
     completed_at: Optional[datetime]
     overrun_reason_category: DelayReasonCategory = DelayReasonCategory.on_employee
     overrun_reason_approved: bool = False
@@ -262,3 +267,31 @@ class NotificationOut(BaseModel):
 class ReportRequest(BaseModel):
     start_date: date
     end_date: date
+
+
+class RecurringTaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    department_id: int
+    assigned_to_user_id: int
+    priority: TaskPriority = TaskPriority.normal
+    expected_minutes: int = Field(gt=0)
+    manager_notes: Optional[str] = None
+    frequency: str = Field(pattern="^(daily|monthly)$")
+    start_date: date
+
+
+class RecurringTaskUpdate(BaseModel):
+    is_active: bool
+
+
+class RecurringTaskOut(RecurringTaskCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    monthly_day: Optional[int] = None
+    generation_hour: int
+    is_active: bool
+    created_by_user_id: int
+    created_at: datetime
+    updated_at: datetime
+    assignee: Optional[UserOut] = None

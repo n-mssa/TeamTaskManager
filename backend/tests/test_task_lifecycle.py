@@ -7,11 +7,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Department, Task, TaskStatus, User, UserRole
+from app.models import Department, RecurringTaskTemplate, Task, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
 from app.routers.users import sync_department_manager
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
+from app.services.recurring_tasks import generated_title, is_template_due
 
 
 class FakeSession:
@@ -182,6 +183,38 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.db.refresh(self.general)
         self.assertIsNone(self.finance.manager_id)
         self.assertEqual(self.general.manager_id, self.finance_manager.id)
+
+
+class RecurringTaskScheduleTests(unittest.TestCase):
+    def template(self, frequency, start_date, monthly_day=None):
+        return RecurringTaskTemplate(
+            title="Finance close",
+            department_id=1,
+            assigned_to_user_id=1,
+            created_by_user_id=2,
+            priority="normal",
+            expected_minutes=30,
+            frequency=frequency,
+            start_date=start_date,
+            monthly_day=monthly_day,
+            generation_hour=8,
+            is_active=True,
+        )
+
+    def test_daily_schedule_skips_friday(self):
+        template = self.template("daily", date(2026, 10, 1))
+
+        self.assertFalse(is_template_due(template, date(2026, 10, 2)))
+        self.assertTrue(is_template_due(template, date(2026, 10, 3)))
+
+    def test_monthly_schedule_uses_last_day_for_short_month(self):
+        template = self.template("monthly", date(2026, 1, 31), monthly_day=31)
+
+        self.assertTrue(is_template_due(template, date(2026, 2, 28)))
+        self.assertFalse(is_template_due(template, date(2026, 2, 27)))
+
+    def test_generated_title_contains_occurrence_date(self):
+        self.assertEqual(generated_title("Finance close", date(2026, 10, 3)), "Finance close - 03-10-2026")
 
 
 if __name__ == "__main__":

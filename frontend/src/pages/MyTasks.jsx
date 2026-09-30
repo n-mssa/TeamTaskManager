@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import KanbanBoard from '../components/KanbanBoard'
 import { statusOptions } from '../utils/labels'
-import { isOverExpected, optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
+import { isEndOfDayOverdue, isOverExpected, optimisticStatusTask, replaceTask, statusChangePayload } from '../utils/tasks'
 
 export default function MyTasks({ user, openTask }) {
   const [tasks, setTasks] = useState([])
@@ -26,7 +26,7 @@ export default function MyTasks({ user, openTask }) {
 
   const visible = useMemo(() => {
     if (filter === 'overdue') {
-      return tasks.filter((task) => isOverExpected(task) && !['done', 'cancelled'].includes(task.status))
+      return tasks.filter((task) => (isOverExpected(task) || isEndOfDayOverdue(task)) && !['done', 'cancelled'].includes(task.status))
     }
     if (filter === 'all') return tasks
     return tasks.filter((task) => task.status === filter)

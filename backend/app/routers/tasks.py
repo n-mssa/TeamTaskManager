@@ -245,7 +245,7 @@ def list_tasks(
             task
             for task in tasks
             if task.status == TaskStatus.delayed
-            or (task.is_over_expected and task.status not in {TaskStatus.done, TaskStatus.cancelled})
+            or ((task.is_over_expected or task.is_eod_overdue) and task.status not in {TaskStatus.done, TaskStatus.cancelled})
         ]
     return query.order_by(Task.due_date.desc(), Task.id.desc()).all()
 
