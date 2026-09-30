@@ -301,7 +301,7 @@ class RecurringTaskOut(RecurringTaskCreate):
 class BillsImportRequest(BaseModel):
     pasted_text: str = Field(min_length=1, max_length=200_000)
     task_date: date
-    expected_minutes: int = Field(default=30, gt=0, le=1440)
+    expected_minutes: int = Field(default=10, gt=0, le=1440)
 
 
 class BillsImportRow(BaseModel):
@@ -323,3 +323,31 @@ class BillsImportResult(BaseModel):
     duplicate_count: int
     invalid_count: int
     created_count: int = 0
+
+
+class BillsImportHistoryRow(BaseModel):
+    id: int
+    title: str
+    task_date: date
+    work_order_id: str
+    customer_rep: Optional[str] = None
+    customer_name: str
+    material_name: str
+    status: TaskStatus
+    created_at: datetime
+
+
+class BillsImportAssignee(BaseModel):
+    id: int
+    full_name_ar: str
+    username: str
+
+
+class BillsImportConfigOut(BaseModel):
+    assigned_to_user_id: int
+    assignee_name: str
+    users: list[BillsImportAssignee]
+
+
+class BillsImportConfigUpdate(BaseModel):
+    assigned_to_user_id: int

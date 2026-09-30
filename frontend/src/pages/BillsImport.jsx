@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardPaste, FileSpreadsheet, ShieldCheck } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, ClipboardPaste, FileSpreadsheet, History, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
 
 function localDateValue() {
@@ -11,13 +11,31 @@ const sample = `مسؤول الزبون\tرقم امر العمل\tاسم الع
 ابو عمر\t12777\tشركة الفخامة للتجارة والتطوير\tMK Cards & envelope`
 
 export default function BillsImport() {
+  const [activeTab, setActiveTab] = useState('upload')
   const [pastedText, setPastedText] = useState('')
   const [taskDate, setTaskDate] = useState(localDateValue())
-  const [expectedMinutes, setExpectedMinutes] = useState(30)
+  const [expectedMinutes, setExpectedMinutes] = useState(10)
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError] = useState('')
   const readyRows = useMemo(() => preview?.rows?.filter((row) => row.status === 'ready') || [], [preview])
+
+  useEffect(() => { loadHistory() }, [])
+
+  async function loadHistory() {
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      setHistory(await api('/bills-import/history'))
+    } catch (err) {
+      setHistoryError(err.message)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   function payload() {
     return {
@@ -47,6 +65,7 @@ export default function BillsImport() {
     setError('')
     try {
       setPreview(await api('/bills-import/commit', { method: 'POST', body: JSON.stringify(payload()) }))
+      loadHistory()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -71,7 +90,13 @@ export default function BillsImport() {
         </div>
       </div>
 
-      <form className="bills-import-form" onSubmit={inspect}>
+      <div className="bills-workspace-tabs" aria-label="أقسام إدخال الفواتير">
+        <button type="button" className={activeTab === 'upload' ? 'active' : ''} onClick={() => setActiveTab('upload')}><ClipboardPaste size={17} />رفع مهام جديدة</button>
+        <button type="button" className={activeTab === 'history' ? 'active' : ''} onClick={() => { setActiveTab('history'); loadHistory() }}><History size={17} />السجل السابق <span>{history.length}</span></button>
+      </div>
+
+      {activeTab === 'upload' && <>
+        <form className="bills-import-form" onSubmit={inspect}>
         <div className="bills-import-guide">
           <ClipboardPaste size={20} />
           <div><strong>تنسيق الأعمدة المطلوب</strong><span>مسؤول الزبون، رقم أمر العمل، اسم العميل، اسم المادة. يجب أن يحتوي كل صف على رقم أمر عمل.</span></div>
@@ -90,12 +115,12 @@ export default function BillsImport() {
           <label>الوقت المتوقع لكل مهمة بالدقائق<input type="number" min="1" max="1440" required value={expectedMinutes} onChange={(event) => { setExpectedMinutes(event.target.value); setPreview(null) }} /></label>
           <button className="primary" disabled={loading}>{loading ? 'جارٍ الفحص...' : 'معاينة المهام'}</button>
         </div>
-      </form>
+        </form>
 
-      {error && <p className="error bills-import-error">{error}</p>}
+        {error && <p className="error bills-import-error">{error}</p>}
 
-      {preview && (
-        <article className="panel bills-preview">
+        {preview && (
+          <article className="panel bills-preview">
           <header className="bills-preview-head">
             <div><p className="eyebrow">المعاينة قبل الحفظ</p><h2>ستُسند المهام إلى {preview.assignee_name}</h2><span>القسم: {preview.department_name}</span></div>
             <div className="bills-summary">
@@ -129,6 +154,28 @@ export default function BillsImport() {
               </button>
             </footer>
           )}
+          </article>
+        )}
+      </>}
+
+      {activeTab === 'history' && (
+        <article className="panel bills-history-panel">
+          <header className="bills-history-head"><div><p className="eyebrow">السجل السابق</p><h2>المهام التي رفعتها سابقاً</h2></div><button type="button" onClick={loadHistory} disabled={historyLoading}>تحديث</button></header>
+          {historyError && <p className="error">{historyError}</p>}
+          {historyLoading ? <div className="empty-state compact">جارٍ تحميل السجل...</div> : history.length ? (
+            <div className="table-wrap bills-history-table"><table>
+              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>تاريخ المهمة</th><th>الحالة</th><th>وقت الرفع</th></tr></thead>
+              <tbody>{history.map((item) => <tr key={item.id}>
+                <td><strong>{item.work_order_id}</strong></td>
+                <td>{item.customer_name}</td>
+                <td>{item.material_name}</td>
+                <td>{item.customer_rep || '-'}</td>
+                <td>{item.task_date}</td>
+                <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
+                <td>{formatDateTime(item.created_at)}</td>
+              </tr>)}</tbody>
+            </table></div>
+          ) : <div className="empty-state"><span className="empty-state-icon"><History size={21} /></span><strong>لا توجد عمليات رفع سابقة</strong><span>ستظهر المهام هنا بعد تأكيد أول دفعة.</span></div>}
         </article>
       )}
     </section>
@@ -142,4 +189,19 @@ function statusLabel(status) {
     invalid: 'غير مكتمل',
     created: 'تم الإنشاء',
   }[status] || status
+}
+
+function taskStatusLabel(status) {
+  return {
+    pending: 'بانتظار التنفيذ',
+    in_progress: 'قيد التنفيذ',
+    blocked: 'متوقف',
+    done: 'منجز',
+    cancelled: 'ملغي',
+    delayed: 'متأخر',
+  }[status] || status
+}
+
+function formatDateTime(value) {
+  return new Intl.DateTimeFormat('ar-JO', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
 }

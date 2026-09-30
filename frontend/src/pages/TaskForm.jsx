@@ -43,6 +43,8 @@ export default function TaskForm({ taskId, onSaved, user }) {
   const [delayReasons, setDelayReasons] = useState([])
   const [attachments, setAttachments] = useState([])
   const [recurringTemplates, setRecurringTemplates] = useState([])
+  const [billsImportConfig, setBillsImportConfig] = useState(null)
+  const [savingBillsAssignee, setSavingBillsAssignee] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const filteredUsers = useMemo(() => {
@@ -58,6 +60,9 @@ export default function TaskForm({ taskId, onSaved, user }) {
     || selectedDepartment?.name_en?.trim().toLowerCase() === 'finance'
   const canCreateRecurring = !taskId
     && selectedDepartment?.recurring_tasks_enabled
+    && (user?.role === 'super_admin' || user?.role === 'manager')
+  const canManageBillsAssignee = !taskId
+    && isFinanceDepartment
     && (user?.role === 'super_admin' || user?.role === 'manager')
 
   useEffect(() => {
@@ -107,6 +112,16 @@ export default function TaskForm({ taskId, onSaved, user }) {
       .then((items) => setRecurringTemplates(items.filter((item) => String(item.department_id) === String(form.department_id))))
       .catch(() => setRecurringTemplates([]))
   }, [canCreateRecurring, form.department_id])
+
+  useEffect(() => {
+    if (!canManageBillsAssignee) {
+      setBillsImportConfig(null)
+      return
+    }
+    api('/bills-import/config')
+      .then(setBillsImportConfig)
+      .catch(() => setBillsImportConfig(null))
+  }, [canManageBillsAssignee])
 
   function setValue(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -257,6 +272,22 @@ export default function TaskForm({ taskId, onSaved, user }) {
     }
   }
 
+  async function updateBillsAssignee(assignedToUserId) {
+    setSavingBillsAssignee(true)
+    setError('')
+    try {
+      const updated = await api('/bills-import/config', {
+        method: 'PATCH',
+        body: JSON.stringify({ assigned_to_user_id: Number(assignedToUserId) }),
+      })
+      setBillsImportConfig(updated)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingBillsAssignee(false)
+    }
+  }
+
   return (
     <section>
       <div className="page-head"><h1>{taskId ? 'تعديل مهمة' : 'إنشاء مهمة'}</h1></div>
@@ -311,6 +342,17 @@ export default function TaskForm({ taskId, onSaved, user }) {
           </div>
           <small>دقائق : ساعات</small>
         </label>
+        {canManageBillsAssignee && billsImportConfig && (
+          <div className="finance-import-assignee span-2">
+            <div><strong>مستلم مهام إدخال الفواتير</strong><small>كل المهام التي ترفعها مريم ستُسند تلقائياً إلى هذا الموظف.</small></div>
+            <label>الموظف
+              <select value={billsImportConfig.assigned_to_user_id} disabled={savingBillsAssignee} onChange={(e) => updateBillsAssignee(e.target.value)}>
+                {billsImportConfig.users.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar} ({item.username})</option>)}
+              </select>
+              <small>{savingBillsAssignee ? 'جارٍ الحفظ...' : `المحدد حالياً: ${billsImportConfig.assignee_name}`}</small>
+            </label>
+          </div>
+        )}
         {canCreateRecurring && (
           <div className="recurrence-panel span-2">
             <div className="recurrence-panel-head">

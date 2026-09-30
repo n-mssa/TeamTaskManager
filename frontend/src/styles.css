@@ -666,6 +666,39 @@ small,
   font-size: 11px;
 }
 
+.finance-import-assignee {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.finance-import-assignee > div,
+.finance-import-assignee label {
+  display: grid;
+  gap: 4px;
+}
+
+.finance-import-assignee > div small,
+.finance-import-assignee label small {
+  color: var(--muted);
+}
+
+.finance-import-assignee label {
+  width: min(360px, 100%);
+}
+
+@media (max-width: 700px) {
+  .finance-import-assignee {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .eod-overdue-badge {
   display: inline-flex;
   width: fit-content;
@@ -1737,6 +1770,44 @@ th {
   gap: 20px;
 }
 
+.bills-workspace-tabs {
+  width: fit-content;
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.bills-workspace-tabs button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.bills-workspace-tabs button.active {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.bills-workspace-tabs button span {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: inherit;
+  background: rgba(148, 163, 184, 0.16);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .bills-hero {
   display: flex;
   align-items: center;
@@ -1919,6 +1990,35 @@ th {
   gap: 9px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.bills-history-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.bills-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+}
+
+.bills-history-head h2 {
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.bills-history-table {
+  border-width: 1px 0 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.bills-history-table td {
+  vertical-align: middle;
 }
 
 :root[data-theme='dark'] .bills-workspace-header {

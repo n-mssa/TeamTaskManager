@@ -40,6 +40,7 @@ USER_COLUMNS = {
 DEPARTMENT_COLUMNS = {
     "is_restricted": "BOOLEAN NOT NULL DEFAULT FALSE",
     "recurring_tasks_enabled": "BOOLEAN NOT NULL DEFAULT FALSE",
+    "billing_assignee_id": "INTEGER REFERENCES users(id)",
 }
 
 INDEXES = [
