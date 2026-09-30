@@ -623,6 +623,49 @@ small,
   margin-top: 18px;
 }
 
+.finance-title-control {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.finance-title-control:focus-within {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.finance-title-control span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 13px;
+  color: var(--text);
+  background: rgba(var(--accent-rgb), 0.08);
+  border-left: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.finance-title-control input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.finance-title-control input:focus {
+  box-shadow: none;
+}
+
+.finance-title-control + small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .eod-overdue-badge {
   display: inline-flex;
   width: fit-content;
