@@ -195,6 +195,10 @@ class Task(Base):
         now = datetime.now(ZoneInfo("Asia/Amman"))
         return now.date() > self.recurrence_date or (now.date() == self.recurrence_date and now.hour >= 17)
 
+    @property
+    def has_sanad(self):
+        return any(attachment.attachment_kind == "sanad" for attachment in self.attachments)
+
 
 class TaskComment(Base):
     __tablename__ = "task_comments"
@@ -219,6 +223,7 @@ class TaskAttachment(Base):
     stored_filename = Column(String(255), nullable=False, unique=True)
     content_type = Column(String(255), nullable=True)
     size_bytes = Column(Integer, nullable=False)
+    attachment_kind = Column(String(32), nullable=False, default="general")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     task = relationship("Task", back_populates="attachments")

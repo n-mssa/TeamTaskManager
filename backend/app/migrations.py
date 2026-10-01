@@ -124,6 +124,7 @@ def apply_migrations():
             )
         )
         add_column_if_missing(connection, "task_status_history", "reason_text", "TEXT")
+        add_column_if_missing(connection, "task_attachments", "attachment_kind", "VARCHAR(32) NOT NULL DEFAULT 'general'")
         connection.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS task_attachments ("
