@@ -12,7 +12,7 @@ from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, split_task, validate_status_reasons, validate_status_transition
 from app.schemas import TaskSplitCreate
 from app.routers.users import sync_department_manager
-from app.routers.bills_imports import finance_import_assignee, parse_rows, title_date
+from app.routers.bills_imports import finance_import_assignee, parse_rows, sanad_notification_recipient_ids, title_date
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 
@@ -192,9 +192,9 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertIsNone(self.finance.manager_id)
         self.assertEqual(self.general.manager_id, self.finance_manager.id)
 
-    def test_finance_import_defaults_to_aseel_and_can_be_configured(self):
+    def test_finance_import_defaults_to_manager_and_can_be_configured(self):
         assignee, _ = finance_import_assignee(self.db, self.finance)
-        self.assertEqual(assignee.id, self.aseel.id)
+        self.assertEqual(assignee.id, self.finance_manager.id)
 
         self.finance.billing_assignee_id = self.finance_employee.id
         self.db.commit()
@@ -227,6 +227,42 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(parts[1].assigned_to_user_id, self.aseel.id)
         self.assertEqual(parts[1].split_part, 2)
         self.assertEqual(parts[0].split_group_id, parts[1].split_group_id)
+
+    def test_sanad_notification_goes_to_active_finance_team_members(self):
+        recipients = sanad_notification_recipient_ids(self.db, self.finance_task, self.bills_user.id)
+
+        self.assertIn(self.finance_manager.id, recipients)
+        self.assertIn(self.finance_employee.id, recipients)
+        self.assertIn(self.aseel.id, recipients)
+        self.assertNotIn(self.general_employee.id, recipients)
+        self.assertNotIn(self.bills_user.id, recipients)
+
+
+class SplitTaskReportTests(unittest.TestCase):
+    def test_two_split_halves_count_as_one_task(self):
+        tasks = [
+            Task(
+                title=f"Split 1.{part}",
+                department_id=1,
+                assigned_to_user_id=part,
+                created_by_user_id=1,
+                status=TaskStatus.done,
+                expected_minutes=15,
+                due_date=date.today(),
+                work_seconds=10 * 60,
+                split_group_id="group-1",
+                split_part=part,
+                split_total=2,
+                self_created_approved=True,
+            )
+            for part in (1, 2)
+        ]
+
+        summary = kpi_summary(tasks)
+
+        self.assertEqual(summary["evaluated_tasks"], 1)
+        self.assertEqual(summary["completed_tasks"], 1)
+        self.assertEqual(summary["total_estimated_hours"], 0.5)
 
 
 class RecurringTaskScheduleTests(unittest.TestCase):

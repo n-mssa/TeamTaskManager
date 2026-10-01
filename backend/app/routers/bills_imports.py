@@ -84,8 +84,6 @@ def finance_import_assignee(db: Session, department: Department):
     users = finance_team_users(db, department)
     assignee = next((user for user in users if user.id == department.billing_assignee_id), None)
     if not assignee:
-        assignee = next((user for user in users if user.username.strip().lower() == "aseel"), None)
-    if not assignee:
         assignee = next((user for user in users if user.id == department.manager_id), None)
     if not assignee:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Finance department needs an active bills assignee")
@@ -258,6 +256,23 @@ def bills_import_history(db: Session = Depends(get_db), current_user: User = Dep
     return [history_row(task) for task in tasks]
 
 
+def sanad_notification_recipient_ids(db: Session, task: Task, uploader_id: int):
+    recipients = {
+        user_id
+        for (user_id,) in (
+            db.query(User.id)
+            .filter(
+                User.department_id == task.department_id,
+                User.is_active.is_(True),
+                User.role != UserRole.bills_user,
+            )
+            .all()
+        )
+    }
+    recipients.discard(uploader_id)
+    return recipients
+
+
 @router.post("/{task_id}/sanad", response_model=BillsImportHistoryRow)
 def upload_sanad(
     task_id: int,
@@ -290,11 +305,7 @@ def upload_sanad(
                     attachment_kind="sanad",
                 )
             )
-        recipients = {task.assigned_to_user_id}
-        department = db.query(Department).filter(Department.id == task.department_id).first()
-        if department and department.manager_id:
-            recipients.add(department.manager_id)
-        recipients.discard(current_user.id)
+        recipients = sanad_notification_recipient_ids(db, task, current_user.id)
         action = "تحديث" if existing else "إرفاق"
         for user_id in recipients:
             db.add(

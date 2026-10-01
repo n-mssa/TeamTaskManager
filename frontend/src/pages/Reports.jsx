@@ -129,6 +129,10 @@ function filterReportByUser(report, userId) {
   const delayedTasks = (report.delayed_tasks || []).filter(belongsToSelected)
   const visibleRows = [...completedTasks, ...pendingInProgressTasks, ...delayedTasks]
   const employeeSummary = summarizeRowsByEmployee(visibleRows)
+  const countRows = (rows, predicate = () => true) => rows.reduce(
+    (total, row) => total + (predicate(row) ? (Number(row.report_weight) || 1) : 0),
+    0,
+  )
 
   return {
     ...report,
@@ -138,13 +142,13 @@ function filterReportByUser(report, userId) {
     by_employee: employeeSummary,
     summary: {
       ...report.summary,
-      created_this_week: completedTasks.length,
-      completed_this_week: completedTasks.length,
-      pending: visibleRows.filter((row) => row.status === 'pending').length,
-      in_progress: visibleRows.filter((row) => row.status === 'in_progress').length,
-      blocked: visibleRows.filter((row) => row.status === 'blocked').length,
-      delayed: delayedTasks.length,
-      completed_late: completedTasks.filter((row) => row.is_late || row.is_overdue).length,
+      created_this_week: countRows(completedTasks),
+      completed_this_week: countRows(completedTasks),
+      pending: countRows(visibleRows, (row) => row.status === 'pending'),
+      in_progress: countRows(visibleRows, (row) => row.status === 'in_progress'),
+      blocked: countRows(visibleRows, (row) => row.status === 'blocked'),
+      delayed: countRows(delayedTasks),
+      completed_late: countRows(completedTasks, (row) => row.is_late || row.is_overdue),
       expected_minutes: visibleRows.reduce((total, row) => total + (Number(row.expected_minutes) || 0), 0),
     },
   }
@@ -225,12 +229,13 @@ function BarChart({ data }) {
 function summarizeRowsByEmployee(rows) {
   const grouped = new Map()
   rows.forEach((row) => {
+    const weight = Number(row.report_weight) || 1
     const current = grouped.get(row.assignee) || { employee: row.assignee, done: 0, in_progress: 0, pending: 0, blocked: 0, delayed: 0, expected_minutes: 0 }
-    if (row.status === 'done') current.done += 1
-    if (row.status === 'in_progress') current.in_progress += 1
-    if (row.status === 'pending') current.pending += 1
-    if (row.status === 'blocked') current.blocked += 1
-    if (row.is_late || row.is_overdue) current.delayed += 1
+    if (row.status === 'done') current.done += weight
+    if (row.status === 'in_progress') current.in_progress += weight
+    if (row.status === 'pending') current.pending += weight
+    if (row.status === 'blocked') current.blocked += weight
+    if (row.is_late || row.is_overdue) current.delayed += weight
     current.expected_minutes += Number(row.expected_minutes) || 0
     grouped.set(row.assignee, current)
   })
@@ -238,9 +243,11 @@ function summarizeRowsByEmployee(rows) {
 }
 
 function ReportTable({ title, rows, onOpenTask, executive = false }) {
+  const weightedTotal = rows.reduce((total, row) => total + (Number(row.report_weight) || 1), 0)
+  const hasSplitRows = weightedTotal !== rows.length
   return (
     <article className="panel report-section report-table-section">
-      <h2>{title}<small>{rows.length} مهمة</small></h2>
+      <h2>{title}<small>{weightedTotal} مهمة{hasSplitRows ? ` · ${rows.length} أجزاء/صفوف` : ''}</small></h2>
       {rows.length
         ? <div className="table-wrap">
           <table className="report-table"><thead><tr><th scope="col">المهمة</th>{!executive && <th scope="col">المكلف</th>}<th scope="col">الوقت المتوقع</th><th scope="col">تاريخ الإسناد</th><th scope="col">تاريخ الإنجاز</th><th scope="col">تجاوزت الوقت؟</th><th scope="col">مدة التجاوز</th>{!executive && <th scope="col">الملاحظات</th>}</tr></thead>
