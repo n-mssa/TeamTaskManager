@@ -99,6 +99,17 @@ def is_kpi_eligible(task: Task):
     return task.status == TaskStatus.done or (task.elapsed_seconds or 0) > 0 or task.is_over_expected
 
 
+def report_weight(task: Task):
+    split_total = task.split_total or 0
+    if task.split_group_id and split_total > 1:
+        return 1 / split_total
+    return 1
+
+
+def weighted_count(tasks, predicate=lambda task: True):
+    return round(sum(report_weight(task) for task in tasks if predicate(task)), 2)
+
+
 def task_row(task: Task):
     over_expected = is_effectively_over_expected(task)
     actual_hours = (task.elapsed_seconds or 0) / 3600
@@ -109,6 +120,10 @@ def task_row(task: Task):
 
     return {
         "id": task.id,
+        "report_weight": report_weight(task),
+        "split_group_id": task.split_group_id,
+        "split_part": task.split_part,
+        "split_total": task.split_total,
         "title": task.title,
         "description": task.description,
         "assignee_id": task.assigned_to_user_id,
@@ -161,11 +176,11 @@ def kpi_summary(tasks: list[Task]):
     raw_delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else None
     delay_rate = min(raw_delay_rate, 100) if raw_delay_rate is not None else None
     return {
-        "evaluated_tasks": len(kpi_tasks),
-        "completed_tasks": sum(1 for task in kpi_tasks if task.status == TaskStatus.done),
+        "evaluated_tasks": weighted_count(kpi_tasks),
+        "completed_tasks": weighted_count(kpi_tasks, lambda task: task.status == TaskStatus.done),
         "total_estimated_hours": round(total_estimated_hours, 2),
         "total_actual_hours": round(total_actual_hours, 2),
-        "overdue_tasks": sum(1 for task in kpi_tasks if is_effectively_over_expected(task)),
+        "overdue_tasks": weighted_count(kpi_tasks, is_effectively_over_expected),
         "total_delay_hours": round(total_delay_hours, 2),
         "attributable_delay_hours": round(attributable_delay_hours, 2),
         "delay_rate": round(delay_rate, 2) if delay_rate is not None else None,
@@ -177,17 +192,18 @@ def summarize_tasks_by_employee(tasks: list[Task]):
     grouped = {}
     for task in tasks:
         employee = task.assignee.full_name_ar if task.assignee else ""
+        weight = report_weight(task)
         current = grouped.setdefault(employee, {"done": 0, "in_progress": 0, "pending": 0, "blocked": 0, "delayed": 0, "expected_minutes": 0})
         if task.status == TaskStatus.done:
-            current["done"] += 1
+            current["done"] += weight
         if task.status == TaskStatus.in_progress:
-            current["in_progress"] += 1
+            current["in_progress"] += weight
         if task.status == TaskStatus.pending:
-            current["pending"] += 1
+            current["pending"] += weight
         if task.status == TaskStatus.blocked:
-            current["blocked"] += 1
+            current["blocked"] += weight
         if is_effectively_over_expected(task):
-            current["delayed"] += 1
+            current["delayed"] += weight
         current["expected_minutes"] += task.expected_minutes or 0
 
     return [
@@ -200,7 +216,7 @@ def summarize_tasks_by_department(tasks: list[Task]):
     grouped = {}
     for task in tasks:
         department = task.department.name_ar if task.department else ""
-        grouped[department] = grouped.get(department, 0) + 1
+        grouped[department] = grouped.get(department, 0) + report_weight(task)
     return [{"department": department, "count": count} for department, count in grouped.items()]
 
 
@@ -218,7 +234,7 @@ def summarize_delay_reasons(tasks: list[Task]):
     grouped = {}
     for task in tasks:
         reason = delay_reason_label(task)
-        grouped[reason] = grouped.get(reason, 0) + 1
+        grouped[reason] = grouped.get(reason, 0) + report_weight(task)
     return [{"reason": reason, "count": count} for reason, count in grouped.items()]
 
 
@@ -255,13 +271,13 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
         "end_date": end_date.isoformat(),
         "selected_user_id": user_id,
         "summary": {
-            "created_this_week": len(completed_in_period),
-            "completed_this_week": len(completed),
-            "pending": sum(1 for task in all_tasks if task.status == TaskStatus.pending),
-            "in_progress": sum(1 for task in all_tasks if task.status == TaskStatus.in_progress),
-            "blocked": sum(1 for task in all_tasks if task.status == TaskStatus.blocked and task.id not in delayed_ids),
-            "delayed": len(delayed),
-            "completed_late": len(completed_late),
+            "created_this_week": weighted_count(completed_in_period),
+            "completed_this_week": weighted_count(completed),
+            "pending": weighted_count(all_tasks, lambda task: task.status == TaskStatus.pending),
+            "in_progress": weighted_count(all_tasks, lambda task: task.status == TaskStatus.in_progress),
+            "blocked": weighted_count(all_tasks, lambda task: task.status == TaskStatus.blocked and task.id not in delayed_ids),
+            "delayed": weighted_count(delayed),
+            "completed_late": weighted_count(completed_late),
             "expected_minutes": sum(task.expected_minutes for task in [*completed, *pending_work, *delayed]),
         },
         "kpi": kpi_summary(list(kpi_tasks_by_id.values())),
