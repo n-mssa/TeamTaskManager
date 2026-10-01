@@ -2018,12 +2018,26 @@ th {
 }
 
 .table-wrap.bills-history-table {
-  overflow-x: auto;
-  overflow-y: hidden;
+  max-height: 52vh;
+  overflow-x: scroll;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .bills-history-table table {
   min-width: 1420px;
+}
+
+.bills-history-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.bills-history-table thead th {
+  background: var(--surface-soft);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .bills-history-table td {
