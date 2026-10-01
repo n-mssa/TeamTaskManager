@@ -2101,6 +2101,8 @@ th {
 .bills-history-edit-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -2112,10 +2114,39 @@ th {
   padding: 0;
 }
 
-.bills-history-edit-actions .icon-button.save {
+.bills-history-edit-actions .save {
   color: #047857;
   border-color: #a7f3d0;
   background: #ecfdf5;
+}
+
+.bills-history-edit-actions .save,
+.bills-history-edit-actions .cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 70px;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.bills-history-table .bills-actions-column {
+  position: sticky;
+  inset-inline-end: 0;
+  z-index: 2;
+  min-width: 104px;
+  background: var(--surface);
+  box-shadow: -8px 0 14px -14px rgba(15, 23, 42, 0.45);
+}
+
+.bills-history-table thead .bills-actions-column {
+  z-index: 3;
+  background: var(--surface-soft);
+}
+
+.bills-history-editing .bills-actions-column {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
 }
 
 :root[data-theme='dark'] .bills-workspace-header {
