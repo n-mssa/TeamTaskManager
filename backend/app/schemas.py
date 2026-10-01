@@ -325,6 +325,7 @@ class BillsImportRow(BaseModel):
     work_order_id: str = ""
     customer_name: str = ""
     material_name: str = ""
+    note: str = Field(default="", max_length=2000)
     title: str = ""
     status: str
     message: Optional[str] = None
@@ -348,6 +349,7 @@ class BillsImportHistoryRow(BaseModel):
     customer_rep: Optional[str] = None
     customer_name: str
     material_name: str
+    note: Optional[str] = None
     status: TaskStatus
     created_at: datetime
     has_sanad: bool = False
@@ -359,6 +361,7 @@ class BillsImportHistoryUpdate(BaseModel):
     customer_rep: Optional[str] = Field(default=None, max_length=160)
     customer_name: str = Field(min_length=1, max_length=220)
     material_name: str = Field(min_length=1, max_length=320)
+    note: Optional[str] = Field(default=None, max_length=2000)
 
 
 class BillsImportAssignee(BaseModel):

@@ -307,6 +307,7 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
                 customer_rep="New rep",
                 customer_name="New customer",
                 material_name="New material",
+                note="Call the customer before processing",
             ),
             self.db,
             self.bills_user,
@@ -315,6 +316,9 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(result.task_date, date(2026, 10, 2))
         self.assertEqual(result.customer_name, "New customer")
         self.assertEqual(result.material_name, "New material")
+        self.assertEqual(result.note, "Call the customer before processing")
+        self.assertEqual(task.billing_note, "Call the customer before processing")
+        self.assertIn("Call the customer before processing", task.description)
         self.assertEqual(task.assigned_to_user_id, self.aseel.id)
         self.assertEqual(task.title, "100 - New customer - New material 10/2/2026")
 
@@ -423,6 +427,15 @@ class BillsImportTests(unittest.TestCase):
 
         self.assertEqual(rows[0]["status"], "invalid")
         self.assertIn("رقم أمر العمل", rows[0]["message"])
+
+    def test_parser_accepts_an_optional_note_column(self):
+        rows = parse_rows(
+            "أبو عمر\t12777\tشركة الفخامة\tMK Cards\tيرجى التدقيق قبل الإصدار",
+            date(2026, 9, 30),
+        )
+
+        self.assertEqual(rows[0]["note"], "يرجى التدقيق قبل الإصدار")
+        self.assertEqual(rows[0]["material_name"], "MK Cards")
 
     def test_title_date_uses_requested_format(self):
         self.assertEqual(title_date(date(2026, 9, 3)), "9/3/2026")

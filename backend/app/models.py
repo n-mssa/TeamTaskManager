@@ -154,6 +154,7 @@ class Task(Base):
     billing_work_order_id = Column(String(80), nullable=True)
     billing_customer_name = Column(String(220), nullable=True)
     billing_material_name = Column(String(320), nullable=True)
+    billing_note = Column(Text, nullable=True)
     split_group_id = Column(String(36), nullable=True, index=True)
     split_part = Column(Integer, nullable=True)
     split_total = Column(Integer, nullable=True)

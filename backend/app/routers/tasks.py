@@ -522,6 +522,7 @@ def split_task(
         billing_work_order_id=task.billing_work_order_id,
         billing_customer_name=task.billing_customer_name,
         billing_material_name=task.billing_material_name,
+        billing_note=task.billing_note,
         split_group_id=group_id,
         split_part=2,
         split_total=2,

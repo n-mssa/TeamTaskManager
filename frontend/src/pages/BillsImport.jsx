@@ -7,8 +7,8 @@ function localDateValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
-const sample = `مسؤول الزبون\tرقم امر العمل\tاسم العميل\tاسم المادة
-ابو عمر\t12777\tشركة الفخامة للتجارة والتطوير\tMK Cards & envelope`
+const sample = `مسؤول الزبون\tرقم امر العمل\tاسم العميل\tاسم المادة\tملاحظات
+ابو عمر\t12777\tشركة الفخامة للتجارة والتطوير\tMK Cards & envelope\tملاحظة اختيارية`
 
 export default function BillsImport() {
   const [activeTab, setActiveTab] = useState('upload')
@@ -24,7 +24,7 @@ export default function BillsImport() {
   const [uploadingSanadId, setUploadingSanadId] = useState(null)
   const [editingHistoryId, setEditingHistoryId] = useState(null)
   const [savingHistoryId, setSavingHistoryId] = useState(null)
-  const [historyEdit, setHistoryEdit] = useState({ task_date: '', customer_rep: '', customer_name: '', material_name: '' })
+  const [historyEdit, setHistoryEdit] = useState({ task_date: '', customer_rep: '', customer_name: '', material_name: '', note: '' })
   const readyRows = useMemo(() => preview?.rows?.filter((row) => row.status === 'ready') || [], [preview])
 
   useEffect(() => { loadHistory() }, [])
@@ -139,12 +139,13 @@ export default function BillsImport() {
       customer_rep: item.customer_rep || '',
       customer_name: item.customer_name,
       material_name: item.material_name,
+      note: item.note || '',
     })
   }
 
   function cancelHistoryEdit() {
     setEditingHistoryId(null)
-    setHistoryEdit({ task_date: '', customer_rep: '', customer_name: '', material_name: '' })
+    setHistoryEdit({ task_date: '', customer_rep: '', customer_name: '', material_name: '', note: '' })
   }
 
   async function saveHistoryEdit(item) {
@@ -185,7 +186,7 @@ export default function BillsImport() {
         <form className="bills-import-form" onSubmit={inspect}>
         <div className="bills-import-guide">
           <ClipboardPaste size={20} />
-          <div><strong>تنسيق الأعمدة المطلوب</strong><span>مسؤول الزبون، رقم أمر العمل، اسم العميل، اسم المادة. يجب أن يحتوي كل صف على رقم أمر عمل.</span></div>
+          <div><strong>تنسيق الأعمدة المطلوب</strong><span>مسؤول الزبون، رقم أمر العمل، اسم العميل، اسم المادة، ملاحظات (اختياري). يجب أن يحتوي كل صف على رقم أمر عمل.</span></div>
         </div>
         <label className="bills-paste-field">الصق البيانات هنا
           <textarea
@@ -220,13 +221,14 @@ export default function BillsImport() {
           )}
           <div className="table-wrap bills-preview-table">
             <table>
-              <thead><tr><th>الصف</th><th>الحالة</th><th>عنوان المهمة</th><th>مسؤول الزبون</th><th>ملاحظة</th></tr></thead>
+              <thead><tr><th>الصف</th><th>الحالة</th><th>عنوان المهمة</th><th>مسؤول الزبون</th><th>ملاحظات المهمة</th><th>نتيجة الفحص</th></tr></thead>
               <tbody>{preview.rows.map((row) => (
                 <tr key={`${row.row_number}-${row.work_order_id}`} className={`bills-row-${row.status}`}>
                   <td>{row.row_number}</td>
                   <td><span className={`bills-row-status ${row.status}`}>{statusLabel(row.status)}</span></td>
                   <td>{row.title || `${row.work_order_id} - ${row.customer_name} - ${row.material_name}`}</td>
                   <td>{row.customer_rep || '-'}</td>
+                  <td>{row.note || '-'}</td>
                   <td>{row.message || '-'}</td>
                 </tr>
               ))}</tbody>
@@ -250,7 +252,7 @@ export default function BillsImport() {
           {historyError && <p className="error">{historyError}</p>}
           {historyLoading ? <div className="empty-state compact">جارٍ تحميل السجل...</div> : history.length ? (
             <div className="table-wrap bills-history-table"><table>
-              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th><th>تعديل</th></tr></thead>
+              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>ملاحظات</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th><th>تعديل</th></tr></thead>
               <tbody>{history.map((item) => {
                 const isEditing = editingHistoryId === item.id
                 return <tr key={item.id} className={isEditing ? 'bills-history-editing' : ''}>
@@ -258,6 +260,7 @@ export default function BillsImport() {
                 <td>{isEditing ? <input aria-label="اسم العميل" value={historyEdit.customer_name} onChange={(event) => setHistoryEdit({ ...historyEdit, customer_name: event.target.value })} /> : item.customer_name}</td>
                 <td>{isEditing ? <input aria-label="اسم المادة" value={historyEdit.material_name} onChange={(event) => setHistoryEdit({ ...historyEdit, material_name: event.target.value })} /> : item.material_name}</td>
                 <td>{isEditing ? <input aria-label="مسؤول الزبون" value={historyEdit.customer_rep} onChange={(event) => setHistoryEdit({ ...historyEdit, customer_rep: event.target.value })} /> : item.customer_rep || '-'}</td>
+                <td className="bills-note-cell">{isEditing ? <textarea aria-label="ملاحظات المهمة" maxLength="2000" value={historyEdit.note} onChange={(event) => setHistoryEdit({ ...historyEdit, note: event.target.value })} /> : item.note || '-'}</td>
                 <td>{isEditing ? <input aria-label="تاريخ المهمة" type="date" value={historyEdit.task_date} onChange={(event) => setHistoryEdit({ ...historyEdit, task_date: event.target.value })} /> : item.task_date}</td>
                 <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
                 <td><div className="sanad-actions">
@@ -281,7 +284,7 @@ export default function BillsImport() {
                   {isEditing ? <>
                     <button type="button" className="icon-button save" aria-label="حفظ التعديلات" title="حفظ التعديلات" disabled={savingHistoryId === item.id} onClick={() => saveHistoryEdit(item)}><Check size={15} /></button>
                     <button type="button" className="icon-button" aria-label="إلغاء التعديل" title="إلغاء التعديل" disabled={savingHistoryId === item.id} onClick={cancelHistoryEdit}><X size={15} /></button>
-                  </> : <button type="button" className="icon-button" aria-label="تعديل المهمة" title="تعديل الأسماء والتاريخ" onClick={() => startHistoryEdit(item)}><Pencil size={15} /></button>}
+                  </> : <button type="button" className="icon-button" aria-label="تعديل المهمة" title="تعديل الأسماء والتاريخ والملاحظات" onClick={() => startHistoryEdit(item)}><Pencil size={15} /></button>}
                 </div></td>
               </tr>
               })}</tbody>

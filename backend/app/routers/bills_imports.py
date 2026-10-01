@@ -104,6 +104,11 @@ def clean_cell(value: str) -> str:
     return " ".join(unescape(value or "").replace("\u00a0", " ").split()).strip()
 
 
+def clean_note(value: str) -> str:
+    decoded = unescape(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    return "\n".join(line.strip() for line in decoded.split("\n") if line.strip())
+
+
 def title_date(value: date) -> str:
     return f"{value.month}/{value.day}/{value.year}"
 
@@ -111,6 +116,18 @@ def title_date(value: date) -> str:
 def row_key(task_date: date, work_order_id: str, customer_name: str, material_name: str) -> str:
     source = "|".join((task_date.isoformat(), work_order_id.casefold(), customer_name.casefold(), material_name.casefold()))
     return sha256(source.encode("utf-8")).hexdigest()
+
+
+def billing_description(customer_rep: str, work_order_id: str, customer_name: str, material_name: str, note: str = "") -> str:
+    lines = [
+        f"مسؤول الزبون: {customer_rep or '-'}",
+        f"رقم أمر العمل: {work_order_id}",
+        f"اسم العميل: {customer_name}",
+        f"اسم المادة: {material_name}",
+    ]
+    if note:
+        lines.append(f"ملاحظات: {note}")
+    return "\n".join(lines)
 
 
 def is_header_row(cells: list[str]) -> bool:
@@ -129,10 +146,11 @@ def parse_rows(pasted_text: str, task_date: date) -> list[dict]:
         cells = [clean_cell(cell) for cell in source_cells]
         if is_header_row(cells):
             continue
-        if len(cells) < 4:
-            cells.extend([""] * (4 - len(cells)))
+        if len(cells) < 5:
+            cells.extend([""] * (5 - len(cells)))
         customer_rep, work_order_id, customer_name = cells[:3]
-        material_name = clean_cell(" ".join(cells[3:]))
+        material_name = cells[3]
+        note = clean_note(" ".join(cells[4:]))
         customer_rep = customer_rep or previous_rep
         customer_name = customer_name or previous_customer
         if customer_rep:
@@ -150,6 +168,8 @@ def parse_rows(pasted_text: str, task_date: date) -> list[dict]:
         message = f"بيانات ناقصة: {', '.join(missing)}" if missing else None
         if title and len(title) > 220:
             message = "عنوان المهمة أطول من 220 حرفاً"
+        if len(note) > 2000:
+            message = "الملاحظات أطول من 2000 حرف"
         rows.append(
             {
                 "row_number": source_row,
@@ -157,6 +177,7 @@ def parse_rows(pasted_text: str, task_date: date) -> list[dict]:
                 "work_order_id": work_order_id,
                 "customer_name": customer_name,
                 "material_name": material_name,
+                "note": note,
                 "title": title,
                 "key": row_key(task_date, work_order_id, customer_name, material_name) if not message else None,
                 "status": "invalid" if message else "ready",
@@ -210,6 +231,7 @@ def history_row(task: Task):
         customer_rep=task.billing_customer_rep,
         customer_name=task.billing_customer_name or "",
         material_name=task.billing_material_name or "",
+        note=task.billing_note,
         status=task.status,
         created_at=task.created_at,
         has_sanad=sanad is not None,
@@ -268,6 +290,7 @@ def update_bills_import_history(
     customer_rep = clean_cell(payload.customer_rep or "")
     customer_name = clean_cell(payload.customer_name)
     material_name = clean_cell(payload.material_name)
+    note = clean_note(payload.note or "")
     if not customer_name or not material_name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer and material names are required")
     title = f"{task.billing_work_order_id} - {customer_name} - {material_name} {title_date(payload.task_date)}"
@@ -279,12 +302,14 @@ def update_bills_import_history(
     task.billing_customer_rep = customer_rep or None
     task.billing_customer_name = customer_name
     task.billing_material_name = material_name
+    task.billing_note = note or None
     task.billing_import_key = row_key(payload.task_date, task.billing_work_order_id or "", customer_name, material_name)
-    task.description = (
-        f"مسؤول الزبون: {customer_rep or '-'}\n"
-        f"رقم أمر العمل: {task.billing_work_order_id}\n"
-        f"اسم العميل: {customer_name}\n"
-        f"اسم المادة: {material_name}"
+    task.description = billing_description(
+        customer_rep,
+        task.billing_work_order_id or "",
+        customer_name,
+        material_name,
+        note,
     )
     try:
         db.commit()
@@ -400,11 +425,12 @@ def commit_bills_import(payload: BillsImportRequest, db: Session = Depends(get_d
     for row in ready_rows:
         task = Task(
             title=row["title"],
-            description=(
-                f"مسؤول الزبون: {row['customer_rep'] or '-'}\n"
-                f"رقم أمر العمل: {row['work_order_id']}\n"
-                f"اسم العميل: {row['customer_name']}\n"
-                f"اسم المادة: {row['material_name']}"
+            description=billing_description(
+                row["customer_rep"],
+                row["work_order_id"],
+                row["customer_name"],
+                row["material_name"],
+                row["note"],
             ),
             department_id=department.id,
             assigned_to_user_id=assignee.id,
@@ -418,6 +444,7 @@ def commit_bills_import(payload: BillsImportRequest, db: Session = Depends(get_d
             billing_work_order_id=row["work_order_id"],
             billing_customer_name=row["customer_name"],
             billing_material_name=row["material_name"],
+            billing_note=row["note"] or None,
         )
         db.add(task)
         db.flush()
