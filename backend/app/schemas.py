@@ -181,8 +181,7 @@ class TaskDelete(BaseModel):
 class TaskSplitCreate(BaseModel):
     current_label: str = Field(min_length=1, max_length=120)
     other_label: str = Field(min_length=1, max_length=120)
-    current_expected_minutes: int = Field(gt=0)
-    other_expected_minutes: int = Field(gt=0)
+    shared_expected_minutes: int = Field(gt=0)
     other_assignee_id: int
 
 

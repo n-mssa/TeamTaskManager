@@ -211,8 +211,7 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
             TaskSplitCreate(
                 current_label="Review",
                 other_label="Add bill",
-                current_expected_minutes=20,
-                other_expected_minutes=10,
+                shared_expected_minutes=30,
                 other_assignee_id=self.aseel.id,
             ),
             self.db,
@@ -227,6 +226,8 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(parts[1].assigned_to_user_id, self.aseel.id)
         self.assertEqual(parts[1].split_part, 2)
         self.assertEqual(parts[0].split_group_id, parts[1].split_group_id)
+        self.assertEqual(parts[0].expected_minutes, 30)
+        self.assertEqual(parts[1].expected_minutes, 30)
         self.assertEqual(parts[0].split_expected_minutes, 30)
         self.assertEqual(parts[1].split_expected_minutes, 30)
         self.assertIsNotNone(parts[0].timer_started_at)
@@ -327,12 +328,13 @@ class SplitTaskReportTests(unittest.TestCase):
                 assigned_to_user_id=part,
                 created_by_user_id=1,
                 status=TaskStatus.done,
-                expected_minutes=15,
+                expected_minutes=30,
                 due_date=date.today(),
                 work_seconds=10 * 60,
                 split_group_id="group-1",
                 split_part=part,
                 split_total=2,
+                split_expected_minutes=30,
                 self_created_approved=True,
             )
             for part in (1, 2)

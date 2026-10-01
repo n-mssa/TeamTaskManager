@@ -411,7 +411,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
       <h3>{task.title}</h3>
       {task.description && <p>{task.description}</p>}
       <div className="task-meta">
-        <span><Clock size={14} />{task.split_group_id ? `${formatMinutes(task.expected_minutes)} للجزء · ${formatMinutes(sharedExpectedMinutes)} إجمالي` : formatMinutes(task.expected_minutes)}</span>
+        <span><Clock size={14} />{task.split_group_id ? `${formatMinutes(sharedExpectedMinutes)} إجمالي` : formatMinutes(task.expected_minutes)}</span>
         <span><CalendarDays size={14} />إسناد {task.due_date}</span>
       </div>
       <div className={`live-timer ${overExpected ? 'is-over' : ''}`}>

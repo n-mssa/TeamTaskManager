@@ -145,8 +145,9 @@ def synchronize_split_expected_minutes(task: Task, db: Session):
         .filter(Task.split_group_id == task.split_group_id, Task.deleted_at.is_(None))
         .all()
     )
-    shared_expected_minutes = sum(item.expected_minutes or 0 for item in group_tasks)
+    shared_expected_minutes = task.expected_minutes
     for group_task in group_tasks:
+        group_task.expected_minutes = shared_expected_minutes
         group_task.split_expected_minutes = shared_expected_minutes
 
 
@@ -498,12 +499,12 @@ def split_task(
     group_id = str(uuid4())
     base_title = task.title
     task.title = make_split_title(base_title, 1, current_label)
-    task.expected_minutes = payload.current_expected_minutes
+    task.expected_minutes = payload.shared_expected_minutes
     task.split_group_id = group_id
     task.split_part = 1
     task.split_total = 2
     task.split_label = current_label
-    task.split_expected_minutes = payload.current_expected_minutes + payload.other_expected_minutes
+    task.split_expected_minutes = payload.shared_expected_minutes
 
     other_task = Task(
         title=make_split_title(base_title, 2, other_label),
@@ -513,7 +514,7 @@ def split_task(
         created_by_user_id=current_user.id,
         priority=task.priority,
         status=TaskStatus.pending,
-        expected_minutes=payload.other_expected_minutes,
+        expected_minutes=payload.shared_expected_minutes,
         due_date=task.due_date,
         manager_notes=task.manager_notes,
         self_created_approved=True,
@@ -525,7 +526,7 @@ def split_task(
         split_part=2,
         split_total=2,
         split_label=other_label,
-        split_expected_minutes=payload.current_expected_minutes + payload.other_expected_minutes,
+        split_expected_minutes=payload.shared_expected_minutes,
     )
     db.add(other_task)
     db.flush()

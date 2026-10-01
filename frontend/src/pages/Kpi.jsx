@@ -250,18 +250,19 @@ function collectKpiRows(report) {
 
 function summarizeKpi(rows) {
   const kpiRows = rows.filter(isKpiEligibleRow)
-  const totalEstimatedHours = kpiRows.reduce((total, row) => total + ((Number(row.expected_minutes) || 0) / 60), 0)
-  const totalActualHours = kpiRows.reduce((total, row) => total + (Number(row.actual_hours) || 0), 0)
-  const totalDelayHours = kpiRows.reduce((total, row) => total + (Number(row.delay_hours) || 0), 0)
-  const attributableDelayHours = kpiRows.reduce((total, row) => total + attributableDelayForRow(row), 0)
+  const rowWeight = (row) => Number(row.report_weight) || 1
+  const totalEstimatedHours = kpiRows.reduce((total, row) => total + ((Number(row.expected_minutes) || 0) / 60) * rowWeight(row), 0)
+  const totalActualHours = kpiRows.reduce((total, row) => total + (Number(row.actual_hours) || 0) * rowWeight(row), 0)
+  const totalDelayHours = kpiRows.reduce((total, row) => total + (Number(row.delay_hours) || 0) * rowWeight(row), 0)
+  const attributableDelayHours = kpiRows.reduce((total, row) => total + attributableDelayForRow(row) * rowWeight(row), 0)
   const rawDelayRate = totalEstimatedHours ? (attributableDelayHours / totalEstimatedHours) * 100 : null
   const delayRate = rawDelayRate === null ? null : Math.min(rawDelayRate, 100)
   return {
-    evaluated_tasks: kpiRows.length,
-    completed_tasks: kpiRows.filter((row) => row.status === 'done').length,
+    evaluated_tasks: kpiRows.reduce((total, row) => total + rowWeight(row), 0),
+    completed_tasks: kpiRows.reduce((total, row) => total + (row.status === 'done' ? rowWeight(row) : 0), 0),
     total_estimated_hours: Number(totalEstimatedHours.toFixed(2)),
     total_actual_hours: Number(totalActualHours.toFixed(2)),
-    overdue_tasks: kpiRows.filter(isEffectivelyOverrun).length,
+    overdue_tasks: kpiRows.reduce((total, row) => total + (isEffectivelyOverrun(row) ? rowWeight(row) : 0), 0),
     total_delay_hours: Number(totalDelayHours.toFixed(2)),
     attributable_delay_hours: Number(attributableDelayHours.toFixed(2)),
     delay_rate: delayRate === null ? null : Number(delayRate.toFixed(2)),

@@ -2743,6 +2743,21 @@ textarea:focus {
   gap: 6px;
 }
 
+.split-task-form .split-shared-time {
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border: 1px solid #99f6e4;
+  border-radius: 12px;
+  color: #115e59;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.split-task-form .split-shared-time small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .split-task-form > button {
   grid-column: 1 / -1;
 }
@@ -2760,6 +2775,12 @@ textarea:focus {
 }
 
 :root[data-theme='dark'] .split-task-form fieldset {
+  border-color: #276b65;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+:root[data-theme='dark'] .split-task-form .split-shared-time {
+  color: #99f6e4;
   border-color: #276b65;
   background: rgba(15, 23, 42, 0.55);
 }
