@@ -2068,6 +2068,42 @@ th {
   font-weight: 700;
 }
 
+.bills-history-editing td {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  vertical-align: top;
+}
+
+.bills-history-editing input {
+  min-width: 150px;
+  height: 38px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.bills-history-editing input[type='date'] {
+  min-width: 135px;
+}
+
+.bills-history-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bills-history-edit-actions .icon-button {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.bills-history-edit-actions .icon-button.save {
+  color: #047857;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
 :root[data-theme='dark'] .bills-workspace-header {
   background: rgba(16, 27, 41, 0.94);
 }

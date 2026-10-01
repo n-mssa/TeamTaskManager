@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardPaste, Eye, FileSpreadsheet, History, ImageUp, ShieldCheck } from 'lucide-react'
+import { Check, CheckCircle2, ClipboardPaste, Eye, FileSpreadsheet, History, ImageUp, Pencil, ShieldCheck, X } from 'lucide-react'
 import { API_BASE_URL, api, getToken } from '../api/client'
 
 function localDateValue() {
@@ -22,6 +22,9 @@ export default function BillsImport() {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyError, setHistoryError] = useState('')
   const [uploadingSanadId, setUploadingSanadId] = useState(null)
+  const [editingHistoryId, setEditingHistoryId] = useState(null)
+  const [savingHistoryId, setSavingHistoryId] = useState(null)
+  const [historyEdit, setHistoryEdit] = useState({ task_date: '', customer_rep: '', customer_name: '', material_name: '' })
   const readyRows = useMemo(() => preview?.rows?.filter((row) => row.status === 'ready') || [], [preview])
 
   useEffect(() => { loadHistory() }, [])
@@ -128,6 +131,40 @@ export default function BillsImport() {
     }
   }
 
+  function startHistoryEdit(item) {
+    setHistoryError('')
+    setEditingHistoryId(item.id)
+    setHistoryEdit({
+      task_date: item.task_date,
+      customer_rep: item.customer_rep || '',
+      customer_name: item.customer_name,
+      material_name: item.material_name,
+    })
+  }
+
+  function cancelHistoryEdit() {
+    setEditingHistoryId(null)
+    setHistoryEdit({ task_date: '', customer_rep: '', customer_name: '', material_name: '' })
+  }
+
+  async function saveHistoryEdit(item) {
+    if (!historyEdit.task_date || !historyEdit.customer_name.trim() || !historyEdit.material_name.trim()) return
+    setSavingHistoryId(item.id)
+    setHistoryError('')
+    try {
+      const updated = await api(`/bills-import/${item.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(historyEdit),
+      })
+      setHistory((current) => current.map((row) => row.id === updated.id ? updated : row))
+      cancelHistoryEdit()
+    } catch (err) {
+      setHistoryError(err.message)
+    } finally {
+      setSavingHistoryId(null)
+    }
+  }
+
   return (
     <section className="bills-import-page">
       <div className="bills-hero">
@@ -213,13 +250,15 @@ export default function BillsImport() {
           {historyError && <p className="error">{historyError}</p>}
           {historyLoading ? <div className="empty-state compact">جارٍ تحميل السجل...</div> : history.length ? (
             <div className="table-wrap bills-history-table"><table>
-              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th></tr></thead>
-              <tbody>{history.map((item) => <tr key={item.id}>
+              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th><th>تعديل</th></tr></thead>
+              <tbody>{history.map((item) => {
+                const isEditing = editingHistoryId === item.id
+                return <tr key={item.id} className={isEditing ? 'bills-history-editing' : ''}>
                 <td><strong>{item.work_order_id}</strong></td>
-                <td>{item.customer_name}</td>
-                <td>{item.material_name}</td>
-                <td>{item.customer_rep || '-'}</td>
-                <td>{item.task_date}</td>
+                <td>{isEditing ? <input aria-label="اسم العميل" value={historyEdit.customer_name} onChange={(event) => setHistoryEdit({ ...historyEdit, customer_name: event.target.value })} /> : item.customer_name}</td>
+                <td>{isEditing ? <input aria-label="اسم المادة" value={historyEdit.material_name} onChange={(event) => setHistoryEdit({ ...historyEdit, material_name: event.target.value })} /> : item.material_name}</td>
+                <td>{isEditing ? <input aria-label="مسؤول الزبون" value={historyEdit.customer_rep} onChange={(event) => setHistoryEdit({ ...historyEdit, customer_rep: event.target.value })} /> : item.customer_rep || '-'}</td>
+                <td>{isEditing ? <input aria-label="تاريخ المهمة" type="date" value={historyEdit.task_date} onChange={(event) => setHistoryEdit({ ...historyEdit, task_date: event.target.value })} /> : item.task_date}</td>
                 <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
                 <td><div className="sanad-actions">
                   {item.has_sanad && <button type="button" className="sanad-view-button" onClick={() => viewSanad(item)}><Eye size={14} />عرض</button>}
@@ -238,7 +277,14 @@ export default function BillsImport() {
                   {item.has_sanad && <small title={item.sanad_filename}>تم الإرفاق</small>}
                 </div></td>
                 <td>{formatDateTime(item.created_at)}</td>
-              </tr>)}</tbody>
+                <td><div className="bills-history-edit-actions">
+                  {isEditing ? <>
+                    <button type="button" className="icon-button save" aria-label="حفظ التعديلات" title="حفظ التعديلات" disabled={savingHistoryId === item.id} onClick={() => saveHistoryEdit(item)}><Check size={15} /></button>
+                    <button type="button" className="icon-button" aria-label="إلغاء التعديل" title="إلغاء التعديل" disabled={savingHistoryId === item.id} onClick={cancelHistoryEdit}><X size={15} /></button>
+                  </> : <button type="button" className="icon-button" aria-label="تعديل المهمة" title="تعديل الأسماء والتاريخ" onClick={() => startHistoryEdit(item)}><Pencil size={15} /></button>}
+                </div></td>
+              </tr>
+              })}</tbody>
             </table></div>
           ) : <div className="empty-state"><span className="empty-state-icon"><History size={21} /></span><strong>لا توجد عمليات رفع سابقة</strong><span>ستظهر المهام هنا بعد تأكيد أول دفعة.</span></div>}
         </article>

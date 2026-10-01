@@ -10,9 +10,9 @@ from app.database import Base
 from app.models import Department, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, split_task, validate_status_reasons, validate_status_transition
-from app.schemas import TaskSplitCreate
+from app.schemas import BillsImportHistoryUpdate, TaskSplitCreate
 from app.routers.users import sync_department_manager
-from app.routers.bills_imports import finance_import_assignee, parse_rows, sanad_notification_recipient_ids, title_date
+from app.routers.bills_imports import finance_import_assignee, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 
@@ -236,6 +236,42 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertIn(self.aseel.id, recipients)
         self.assertNotIn(self.general_employee.id, recipients)
         self.assertNotIn(self.bills_user.id, recipients)
+
+    def test_bills_user_can_edit_own_uploaded_names_and_date_without_reassignment(self):
+        original_date = date(2026, 10, 1)
+        task = Task(
+            title="100 - Old customer - Old material 10/1/2026",
+            department_id=self.finance.id,
+            assigned_to_user_id=self.aseel.id,
+            created_by_user_id=self.bills_user.id,
+            status=TaskStatus.pending,
+            expected_minutes=10,
+            due_date=original_date,
+            billing_import_key=row_key(original_date, "100", "Old customer", "Old material"),
+            billing_work_order_id="100",
+            billing_customer_name="Old customer",
+            billing_material_name="Old material",
+        )
+        self.db.add(task)
+        self.db.commit()
+
+        result = update_bills_import_history(
+            task.id,
+            BillsImportHistoryUpdate(
+                task_date=date(2026, 10, 2),
+                customer_rep="New rep",
+                customer_name="New customer",
+                material_name="New material",
+            ),
+            self.db,
+            self.bills_user,
+        )
+
+        self.assertEqual(result.task_date, date(2026, 10, 2))
+        self.assertEqual(result.customer_name, "New customer")
+        self.assertEqual(result.material_name, "New material")
+        self.assertEqual(task.assigned_to_user_id, self.aseel.id)
+        self.assertEqual(task.title, "100 - New customer - New material 10/2/2026")
 
 
 class SplitTaskReportTests(unittest.TestCase):
