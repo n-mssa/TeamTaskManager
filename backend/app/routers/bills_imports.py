@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import Department, Notification, Task, TaskAttachment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
-from ..schemas import BillsImportAssignee, BillsImportConfigOut, BillsImportConfigUpdate, BillsImportHistoryRow, BillsImportRequest, BillsImportResult, BillsImportRow
+from ..schemas import BillsImportAssignee, BillsImportConfigOut, BillsImportConfigUpdate, BillsImportHistoryRow, BillsImportHistoryUpdate, BillsImportRequest, BillsImportResult, BillsImportRow
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/bills-import", tags=["bills import"])
@@ -254,6 +254,45 @@ def bills_import_history(db: Session = Depends(get_db), current_user: User = Dep
         query = query.filter(Task.created_by_user_id == current_user.id)
     tasks = query.order_by(Task.created_at.desc(), Task.id.desc()).limit(500).all()
     return [history_row(task) for task in tasks]
+
+
+@router.patch("/{task_id}", response_model=BillsImportHistoryRow)
+def update_bills_import_history(
+    task_id: int,
+    payload: BillsImportHistoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_bills_importer(current_user)
+    task = bills_task_or_403(db, task_id, current_user)
+    customer_rep = clean_cell(payload.customer_rep or "")
+    customer_name = clean_cell(payload.customer_name)
+    material_name = clean_cell(payload.material_name)
+    if not customer_name or not material_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer and material names are required")
+    title = f"{task.billing_work_order_id} - {customer_name} - {material_name} {title_date(payload.task_date)}"
+    if len(title) > 220:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The updated task name is longer than 220 characters")
+
+    task.due_date = payload.task_date
+    task.title = title
+    task.billing_customer_rep = customer_rep or None
+    task.billing_customer_name = customer_name
+    task.billing_material_name = material_name
+    task.billing_import_key = row_key(payload.task_date, task.billing_work_order_id or "", customer_name, material_name)
+    task.description = (
+        f"مسؤول الزبون: {customer_rep or '-'}\n"
+        f"رقم أمر العمل: {task.billing_work_order_id}\n"
+        f"اسم العميل: {customer_name}\n"
+        f"اسم المادة: {material_name}"
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A matching bill task already exists for this date")
+    db.refresh(task)
+    return history_row(task)
 
 
 def sanad_notification_recipient_ids(db: Session, task: Task, uploader_id: int):

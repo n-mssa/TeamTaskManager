@@ -353,6 +353,13 @@ class BillsImportHistoryRow(BaseModel):
     sanad_filename: Optional[str] = None
 
 
+class BillsImportHistoryUpdate(BaseModel):
+    task_date: date
+    customer_rep: Optional[str] = Field(default=None, max_length=160)
+    customer_name: str = Field(min_length=1, max_length=220)
+    material_name: str = Field(min_length=1, max_length=320)
+
+
 class BillsImportAssignee(BaseModel):
     id: int
     full_name_ar: str
