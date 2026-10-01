@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Clock, CalendarDays, GripVertical } from 'lucide-react'
+import { Clock, CalendarDays, FileCheck2, GripVertical } from 'lucide-react'
 import { api } from '../api/client'
 import { boardColumns, priorityLabels } from '../utils/labels'
 import { elapsedSeconds, formatDuration, isEndOfDayOverdue, isOverExpected } from '../utils/tasks'
@@ -382,7 +382,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const pausedTooLong = isPausedTooLong(task)
   return (
     <article
-      className={`task-card ${visuallyOverdue ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''}`}
+      className={`task-card ${visuallyOverdue ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''} ${task.has_sanad ? 'has-sanad' : ''}`}
       draggable
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
@@ -404,6 +404,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
         </span>
       </div>
       {pendingSelfApproval && <span className="approval-badge">بانتظار الاعتماد</span>}
+      {task.has_sanad && <span className="sanad-badge"><FileCheck2 size={13} />تم إرفاق السند</span>}
       {missedEndOfDay && <span className="eod-overdue-badge">لم تُنجز قبل نهاية اليوم</span>}
       <h3>{task.title}</h3>
       {task.description && <p>{task.description}</p>}

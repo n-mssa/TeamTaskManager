@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardPaste, FileSpreadsheet, History, ShieldCheck } from 'lucide-react'
-import { api } from '../api/client'
+import { CheckCircle2, ClipboardPaste, Eye, FileSpreadsheet, History, ImageUp, ShieldCheck } from 'lucide-react'
+import { API_BASE_URL, api, getToken } from '../api/client'
 
 function localDateValue() {
   const now = new Date()
@@ -21,6 +21,7 @@ export default function BillsImport() {
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyError, setHistoryError] = useState('')
+  const [uploadingSanadId, setUploadingSanadId] = useState(null)
   const readyRows = useMemo(() => preview?.rows?.filter((row) => row.status === 'ready') || [], [preview])
 
   useEffect(() => { loadHistory() }, [])
@@ -77,6 +78,54 @@ export default function BillsImport() {
     setPastedText(value)
     setPreview(null)
     setError('')
+  }
+
+  async function uploadSanad(item, file) {
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setHistoryError('يجب أن يكون السند صورة JPG أو PNG أو WEBP.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setHistoryError('يجب ألا يتجاوز حجم صورة السند 10 ميجابايت.')
+      return
+    }
+    setUploadingSanadId(item.id)
+    setHistoryError('')
+    const formData = new FormData()
+    formData.append('sanad', file)
+    try {
+      const updated = await api(`/bills-import/${item.id}/sanad`, { method: 'POST', body: formData })
+      setHistory((current) => current.map((row) => row.id === updated.id ? updated : row))
+    } catch (err) {
+      setHistoryError(err.message)
+    } finally {
+      setUploadingSanadId(null)
+    }
+  }
+
+  async function viewSanad(item) {
+    setHistoryError('')
+    const previewWindow = window.open('', '_blank')
+    if (previewWindow) previewWindow.opener = null
+    try {
+      const response = await fetch(`${API_BASE_URL}/bills-import/${item.id}/sanad`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      })
+      if (!response.ok) throw new Error('تعذر فتح صورة السند.')
+      const objectUrl = URL.createObjectURL(await response.blob())
+      if (previewWindow) previewWindow.location.href = objectUrl
+      else {
+        const link = document.createElement('a')
+        link.href = objectUrl
+        link.download = item.sanad_filename || 'sanad'
+        link.click()
+      }
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (err) {
+      if (previewWindow) previewWindow.close()
+      setHistoryError(err.message)
+    }
   }
 
   return (
@@ -164,7 +213,7 @@ export default function BillsImport() {
           {historyError && <p className="error">{historyError}</p>}
           {historyLoading ? <div className="empty-state compact">جارٍ تحميل السجل...</div> : history.length ? (
             <div className="table-wrap bills-history-table"><table>
-              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>تاريخ المهمة</th><th>الحالة</th><th>وقت الرفع</th></tr></thead>
+              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th></tr></thead>
               <tbody>{history.map((item) => <tr key={item.id}>
                 <td><strong>{item.work_order_id}</strong></td>
                 <td>{item.customer_name}</td>
@@ -172,6 +221,22 @@ export default function BillsImport() {
                 <td>{item.customer_rep || '-'}</td>
                 <td>{item.task_date}</td>
                 <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
+                <td><div className="sanad-actions">
+                  {item.has_sanad && <button type="button" className="sanad-view-button" onClick={() => viewSanad(item)}><Eye size={14} />عرض</button>}
+                  <label className={`sanad-upload-button ${item.has_sanad ? 'replace' : ''}`}>
+                    <ImageUp size={14} />{uploadingSanadId === item.id ? 'جارٍ الرفع...' : item.has_sanad ? 'استبدال' : 'إرفاق سند'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={uploadingSanadId !== null}
+                      onChange={(event) => {
+                        uploadSanad(item, event.target.files?.[0])
+                        event.target.value = ''
+                      }}
+                    />
+                  </label>
+                  {item.has_sanad && <small title={item.sanad_filename}>تم الإرفاق</small>}
+                </div></td>
                 <td>{formatDateTime(item.created_at)}</td>
               </tr>)}</tbody>
             </table></div>

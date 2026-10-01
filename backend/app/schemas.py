@@ -186,6 +186,7 @@ class TaskAttachmentOut(BaseModel):
     original_filename: str
     content_type: Optional[str]
     size_bytes: int
+    attachment_kind: str = "general"
     created_at: datetime
 
 
@@ -199,6 +200,7 @@ class TaskOut(TaskBase):
     elapsed_seconds: int
     is_over_expected: bool
     is_eod_overdue: bool = False
+    has_sanad: bool = False
     recurring_template_id: Optional[int] = None
     recurrence_date: Optional[date] = None
     recurrence_frequency: Optional[str] = None
@@ -335,6 +337,8 @@ class BillsImportHistoryRow(BaseModel):
     material_name: str
     status: TaskStatus
     created_at: datetime
+    has_sanad: bool = False
+    sanad_filename: Optional[str] = None
 
 
 class BillsImportAssignee(BaseModel):

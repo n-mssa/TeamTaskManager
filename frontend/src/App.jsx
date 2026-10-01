@@ -123,6 +123,9 @@ export default function App() {
           setNotifications(items)
           const fresh = items.find((item) => !seen.has(item.id))
           if (fresh) {
+            if (fresh.notification_type === 'sanad_attached') {
+              window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+            }
             seen.add(fresh.id)
             sessionStorage.setItem(seenKey, JSON.stringify([...seen].slice(-100)))
             setToast(fresh)

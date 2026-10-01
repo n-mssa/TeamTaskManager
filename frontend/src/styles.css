@@ -2021,6 +2021,53 @@ th {
   vertical-align: middle;
 }
 
+.sanad-actions {
+  min-width: 155px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sanad-actions button,
+.sanad-upload-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sanad-upload-button:not(.replace) {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+}
+
+.sanad-upload-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sanad-actions small {
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 :root[data-theme='dark'] .bills-workspace-header {
   background: rgba(16, 27, 41, 0.94);
 }
@@ -2556,6 +2603,43 @@ textarea:focus {
 .task-card.is-overdue .task-progress span,
 .live-timer.is-over + .task-progress span {
   background: linear-gradient(90deg, #fb7185, #dc2626);
+}
+
+.task-card.has-sanad:not(.is-overdue) {
+  border-color: #a78bfa;
+  background: #f5f3ff;
+  box-shadow: inset 3px 0 0 #8b5cf6, var(--shadow-card);
+}
+
+.task-card.has-sanad:not(.is-overdue):hover {
+  border-color: #8b5cf6;
+  box-shadow: inset 3px 0 0 #7c3aed, var(--shadow-hover);
+}
+
+.sanad-badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #6d28d9;
+  background: #ede9fe;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:root[data-theme='dark'] .task-card.has-sanad:not(.is-overdue) {
+  border-color: #6d4caf;
+  background: #251d38;
+}
+
+:root[data-theme='dark'] .sanad-badge,
+:root[data-theme='dark'] .sanad-upload-button:not(.replace) {
+  color: #c4b5fd;
+  background: #31264a;
+  border-color: #6d4caf;
 }
 
 .priority,

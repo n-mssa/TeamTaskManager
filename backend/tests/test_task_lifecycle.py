@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Department, RecurringTaskTemplate, Task, TaskStatus, User, UserRole
+from app.models import Department, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
 from app.routers.users import sync_department_manager
@@ -234,6 +234,29 @@ class RecurringTaskScheduleTests(unittest.TestCase):
 
 
 class BillsImportTests(unittest.TestCase):
+    def test_task_reports_when_a_sanad_is_attached(self):
+        task = Task(
+            title="Imported bill",
+            department_id=1,
+            assigned_to_user_id=1,
+            created_by_user_id=2,
+            expected_minutes=10,
+            due_date=date.today(),
+        )
+        task.attachments = [
+            TaskAttachment(
+                task_id=1,
+                uploaded_by_user_id=2,
+                original_filename="sanad.jpg",
+                stored_filename="tasks/1/sanad.jpg",
+                content_type="image/jpeg",
+                size_bytes=100,
+                attachment_kind="sanad",
+            )
+        ]
+
+        self.assertTrue(task.has_sanad)
+
     def test_parser_carries_forward_merged_style_cells_and_builds_titles(self):
         pasted = (
             "مسؤول الزبون\tرقم امر العمل\tاسم العميل\tاسم المادة\n"

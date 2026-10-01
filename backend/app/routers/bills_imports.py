@@ -1,25 +1,56 @@
 import csv
+import re
 from datetime import date
 from hashlib import sha256
 from html import unescape
 from io import StringIO
+from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Department, Notification, Task, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
+from ..models import Department, Notification, Task, TaskAttachment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..schemas import BillsImportAssignee, BillsImportConfigOut, BillsImportConfigUpdate, BillsImportHistoryRow, BillsImportRequest, BillsImportResult, BillsImportRow
+from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/bills-import", tags=["bills import"])
+MAX_SANAD_BYTES = 10 * 1024 * 1024
+SANAD_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 def require_bills_importer(user: User):
     if user.role not in {UserRole.bills_user, UserRole.super_admin}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bills import access only")
+
+
+def bills_task_or_403(db: Session, task_id: int, current_user: User):
+    task = db.query(Task).filter(Task.id == task_id, Task.billing_import_key.is_not(None), Task.deleted_at.is_(None)).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imported bill task not found")
+    if current_user.role == UserRole.bills_user and task.created_by_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This task was uploaded by another user")
+    return task
+
+
+def read_sanad_image(upload: UploadFile, task_id: int):
+    content_type = (upload.content_type or "").lower()
+    if content_type not in SANAD_CONTENT_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The sanad must be a JPG, PNG, or WEBP image")
+    original_filename = Path(upload.filename or "sanad").name.strip()
+    original_filename = re.sub(r"[^A-Za-z0-9._ -]", "_", original_filename)[:255] or "sanad"
+    content = upload.file.read(MAX_SANAD_BYTES + 1)
+    if len(content) > MAX_SANAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="The sanad image must be 10 MB or smaller")
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The sanad image is empty")
+    stored_filename = f"tasks/{task_id}/{uuid4().hex}_sanad_{original_filename}"
+    return original_filename, stored_filename, len(content), content, content_type
 
 
 def finance_department(db: Session):
@@ -171,6 +202,23 @@ def result_for(department: Department, assignee: User, rows: list[dict], created
     )
 
 
+def history_row(task: Task):
+    sanad = next((attachment for attachment in task.attachments if attachment.attachment_kind == "sanad"), None)
+    return BillsImportHistoryRow(
+        id=task.id,
+        title=task.title,
+        task_date=task.due_date,
+        work_order_id=task.billing_work_order_id or "",
+        customer_rep=task.billing_customer_rep,
+        customer_name=task.billing_customer_name or "",
+        material_name=task.billing_material_name or "",
+        status=task.status,
+        created_at=task.created_at,
+        has_sanad=sanad is not None,
+        sanad_filename=sanad.original_filename if sanad else None,
+    )
+
+
 @router.get("/config", response_model=BillsImportConfigOut)
 def get_bills_import_config(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     department = finance_department(db)
@@ -203,24 +251,86 @@ def update_bills_import_config(payload: BillsImportConfigUpdate, db: Session = D
 @router.get("/history", response_model=list[BillsImportHistoryRow])
 def bills_import_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_bills_importer(current_user)
-    query = db.query(Task).filter(Task.billing_import_key.is_not(None), Task.deleted_at.is_(None))
+    query = db.query(Task).options(joinedload(Task.attachments)).filter(Task.billing_import_key.is_not(None), Task.deleted_at.is_(None))
     if current_user.role == UserRole.bills_user:
         query = query.filter(Task.created_by_user_id == current_user.id)
     tasks = query.order_by(Task.created_at.desc(), Task.id.desc()).limit(500).all()
-    return [
-        BillsImportHistoryRow(
-            id=task.id,
-            title=task.title,
-            task_date=task.due_date,
-            work_order_id=task.billing_work_order_id or "",
-            customer_rep=task.billing_customer_rep,
-            customer_name=task.billing_customer_name or "",
-            material_name=task.billing_material_name or "",
-            status=task.status,
-            created_at=task.created_at,
-        )
-        for task in tasks
-    ]
+    return [history_row(task) for task in tasks]
+
+
+@router.post("/{task_id}/sanad", response_model=BillsImportHistoryRow)
+def upload_sanad(
+    task_id: int,
+    sanad: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_bills_importer(current_user)
+    task = bills_task_or_403(db, task_id, current_user)
+    original_filename, stored_filename, size, content, content_type = read_sanad_image(sanad, task.id)
+    existing = db.query(TaskAttachment).filter(TaskAttachment.task_id == task.id, TaskAttachment.attachment_kind == "sanad").first()
+    old_stored_filename = existing.stored_filename if existing else None
+    upload_object(stored_filename, content, content_type)
+    try:
+        if existing:
+            existing.uploaded_by_user_id = current_user.id
+            existing.original_filename = original_filename
+            existing.stored_filename = stored_filename
+            existing.content_type = content_type
+            existing.size_bytes = size
+        else:
+            db.add(
+                TaskAttachment(
+                    task_id=task.id,
+                    uploaded_by_user_id=current_user.id,
+                    original_filename=original_filename,
+                    stored_filename=stored_filename,
+                    content_type=content_type,
+                    size_bytes=size,
+                    attachment_kind="sanad",
+                )
+            )
+        recipients = {task.assigned_to_user_id}
+        department = db.query(Department).filter(Department.id == task.department_id).first()
+        if department and department.manager_id:
+            recipients.add(department.manager_id)
+        recipients.discard(current_user.id)
+        action = "تحديث" if existing else "إرفاق"
+        for user_id in recipients:
+            db.add(
+                Notification(
+                    user_id=user_id,
+                    task_id=task.id,
+                    title=f"تم {action} سند",
+                    message=f"تم {action} سند للمهمة: {task.title}",
+                    notification_type="sanad_attached",
+                )
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_objects([stored_filename])
+        raise
+    if old_stored_filename:
+        delete_objects([old_stored_filename])
+    db.refresh(task)
+    return history_row(task)
+
+
+@router.get("/{task_id}/sanad")
+def download_sanad(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_bills_importer(current_user)
+    task = bills_task_or_403(db, task_id, current_user)
+    attachment = db.query(TaskAttachment).filter(TaskAttachment.task_id == task.id, TaskAttachment.attachment_kind == "sanad").first()
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sanad image not found")
+    content, content_type = download_object(attachment.stored_filename)
+    safe_filename = attachment.original_filename.replace('"', "")
+    return Response(
+        content,
+        media_type=attachment.content_type or content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+    )
 
 
 @router.post("/preview", response_model=BillsImportResult)
