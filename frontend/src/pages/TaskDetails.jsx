@@ -31,6 +31,17 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [editingCommentText, setEditingCommentText] = useState('')
   const [delayCategory, setDelayCategory] = useState('on_employee')
   const [productionIssueReason, setProductionIssueReason] = useState('')
+  const [splitOpen, setSplitOpen] = useState(false)
+  const [splitUsers, setSplitUsers] = useState([])
+  const [splitError, setSplitError] = useState('')
+  const [splitSaving, setSplitSaving] = useState(false)
+  const [splitForm, setSplitForm] = useState({
+    current_label: 'متابعة الجزء الحالي',
+    other_label: 'إكمال الجزء الآخر',
+    current_expected_minutes: 5,
+    other_expected_minutes: 5,
+    other_assignee_id: '',
+  })
   const [, setTick] = useState(0)
 
   async function load() {
@@ -136,20 +147,106 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
   }
 
+  async function openSplitForm() {
+    setSplitError('')
+    try {
+      const users = await api(`/tasks/${task.id}/split-options`)
+      const firstPart = Math.max(1, Math.ceil(task.expected_minutes / 2))
+      const secondPart = Math.max(1, task.expected_minutes - firstPart)
+      setSplitUsers(users)
+      setSplitForm((current) => ({
+        ...current,
+        current_expected_minutes: firstPart,
+        other_expected_minutes: secondPart,
+        other_assignee_id: users[0]?.id || '',
+      }))
+      setSplitOpen(true)
+    } catch (error) {
+      setSplitError(error.message)
+    }
+  }
+
+  async function submitSplit(event) {
+    event.preventDefault()
+    setSplitError('')
+    setSplitSaving(true)
+    try {
+      const parts = await api(`/tasks/${task.id}/split`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...splitForm,
+          current_expected_minutes: Number(splitForm.current_expected_minutes),
+          other_expected_minutes: Number(splitForm.other_expected_minutes),
+          other_assignee_id: Number(splitForm.other_assignee_id),
+        }),
+      })
+      setTask(parts[0])
+      setSplitOpen(false)
+      window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+    } catch (error) {
+      setSplitError(error.message)
+    } finally {
+      setSplitSaving(false)
+    }
+  }
+
   if (!task) return <div className="empty">جار التحميل...</div>
   const canReviewDelay = ['super_admin', 'admin', 'manager'].includes(user.role)
   const canDeleteTask = ['super_admin', 'admin', 'manager'].includes(user.role)
   const canFlagProductionIssue = canReviewDelay && task.status === 'done'
   const isEmployeeSelfCreated = task.created_by_user_id === task.assigned_to_user_id && task.assignee?.role === 'employee'
+  const isFinance = task.department?.name_en?.trim().toLowerCase() === 'finance' || task.department?.name_ar === 'المالية'
+  const canSplitTask = isFinance
+    && !task.split_group_id
+    && !['done', 'cancelled'].includes(task.status)
+    && (user.role === 'super_admin' || (user.role === 'manager' && user.department_id === task.department_id) || user.id === task.assigned_to_user_id)
   return (
     <section>
       <div className="page-head">
         <h1>{task.title}</h1>
         <div className="actions">
           {user.role !== 'employee' && <button className="primary" onClick={() => editTask(task.id)}>تعديل مهمة</button>}
+          {canSplitTask && <button type="button" className="split-task-button" onClick={openSplitForm}>تقسيم وإسناد المهمة</button>}
           {canDeleteTask && <button className="danger" onClick={deleteTask}>حذف المهمة</button>}
         </div>
       </div>
+      {splitError && <div className="error">{splitError}</div>}
+      {task.split_group_id && (
+        <article className="panel split-task-summary">
+          <strong>مهمة مقسمة: الجزء 1.{task.split_part} من 1.{task.split_total}</strong>
+          <span>{task.split_label}</span>
+        </article>
+      )}
+      {splitOpen && (
+        <article className="panel split-task-panel">
+          <div className="split-task-panel-head">
+            <div>
+              <h2>تقسيم المهمة بين موظفين</h2>
+              <p>سيبقى الجزء 1.1 مع الموظف الحالي ووقته المسجل، وسيبدأ الجزء 1.2 كمهمة جديدة بانتظار التنفيذ.</p>
+            </div>
+            <button type="button" onClick={() => setSplitOpen(false)}>إلغاء</button>
+          </div>
+          <form className="split-task-form" onSubmit={submitSplit}>
+            <fieldset>
+              <legend>الجزء 1.1 - {task.assignee?.full_name_ar}</legend>
+              <label>وصف الجزء<input required maxLength="120" value={splitForm.current_label} onChange={(event) => setSplitForm({ ...splitForm, current_label: event.target.value })} /></label>
+              <label>الوقت المتوقع بالدقائق<input required min="1" type="number" value={splitForm.current_expected_minutes} onChange={(event) => setSplitForm({ ...splitForm, current_expected_minutes: event.target.value })} /></label>
+            </fieldset>
+            <fieldset>
+              <legend>الجزء 1.2</legend>
+              <label>وصف الجزء<input required maxLength="120" value={splitForm.other_label} onChange={(event) => setSplitForm({ ...splitForm, other_label: event.target.value })} /></label>
+              <label>إسناد إلى
+                <select required value={splitForm.other_assignee_id} onChange={(event) => setSplitForm({ ...splitForm, other_assignee_id: event.target.value })}>
+                  {!splitUsers.length && <option value="">لا يوجد موظف آخر متاح</option>}
+                  {splitUsers.map((member) => <option key={member.id} value={member.id}>{member.full_name_ar}</option>)}
+                </select>
+              </label>
+              <label>الوقت المتوقع بالدقائق<input required min="1" type="number" value={splitForm.other_expected_minutes} onChange={(event) => setSplitForm({ ...splitForm, other_expected_minutes: event.target.value })} /></label>
+            </fieldset>
+            <button className="primary" disabled={splitSaving || !splitUsers.length}>{splitSaving ? 'جارٍ التقسيم...' : 'تأكيد التقسيم والإسناد'}</button>
+          </form>
+        </article>
+      )}
       <div className="details-grid">
         <div><span>الحالة</span><strong>{statusLabels[task.status]}</strong></div>
         <div><span>الأولوية</span><strong>{priorityLabels[task.priority]}</strong></div>
