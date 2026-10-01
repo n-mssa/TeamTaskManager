@@ -169,7 +169,7 @@ def task_row(task: Task):
 
 def kpi_summary(tasks: list[Task]):
     kpi_tasks = [task for task in tasks if is_kpi_eligible(task)]
-    total_estimated_hours = sum((task.expected_minutes or 0) / 60 for task in kpi_tasks)
+    total_estimated_hours = sum((task.expected_minutes or 0) / 60 * report_weight(task) for task in kpi_tasks)
     total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 * report_weight(task) for task in kpi_tasks)
     total_delay_hours = sum(delay_hours_for_task(task) * report_weight(task) for task in kpi_tasks)
     attributable_delay_hours = sum(attributable_delay_hours_for_task(task) * report_weight(task) for task in kpi_tasks)
@@ -204,7 +204,7 @@ def summarize_tasks_by_employee(tasks: list[Task]):
             current["blocked"] += weight
         if is_effectively_over_expected(task):
             current["delayed"] += weight
-        current["expected_minutes"] += task.expected_minutes or 0
+        current["expected_minutes"] += (task.expected_minutes or 0) * weight
 
     return [
         {"employee": employee, **values}
@@ -278,7 +278,10 @@ def weekly_report(db: Session, current_user: User, start_date: date, end_date: d
             "blocked": weighted_count(all_tasks, lambda task: task.status == TaskStatus.blocked and task.id not in delayed_ids),
             "delayed": weighted_count(delayed),
             "completed_late": weighted_count(completed_late),
-            "expected_minutes": sum(task.expected_minutes for task in [*completed, *pending_work, *delayed]),
+            "expected_minutes": sum(
+                task.expected_minutes * report_weight(task)
+                for task in [*completed, *pending_work, *delayed]
+            ),
         },
         "kpi": kpi_summary(list(kpi_tasks_by_id.values())),
         "completed_tasks": [task_row(task) for task in completed],

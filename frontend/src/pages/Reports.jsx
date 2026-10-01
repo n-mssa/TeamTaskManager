@@ -149,7 +149,10 @@ function filterReportByUser(report, userId) {
       blocked: countRows(visibleRows, (row) => row.status === 'blocked'),
       delayed: countRows(delayedTasks),
       completed_late: countRows(completedTasks, (row) => row.is_late || row.is_overdue),
-      expected_minutes: visibleRows.reduce((total, row) => total + (Number(row.expected_minutes) || 0), 0),
+      expected_minutes: visibleRows.reduce(
+        (total, row) => total + (Number(row.expected_minutes) || 0) * (Number(row.report_weight) || 1),
+        0,
+      ),
     },
   }
 }
@@ -236,7 +239,7 @@ function summarizeRowsByEmployee(rows) {
     if (row.status === 'pending') current.pending += weight
     if (row.status === 'blocked') current.blocked += weight
     if (row.is_late || row.is_overdue) current.delayed += weight
-    current.expected_minutes += Number(row.expected_minutes) || 0
+    current.expected_minutes += (Number(row.expected_minutes) || 0) * weight
     grouped.set(row.assignee, current)
   })
   return Array.from(grouped.values())

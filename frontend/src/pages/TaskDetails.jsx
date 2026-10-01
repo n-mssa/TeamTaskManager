@@ -38,8 +38,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   const [splitForm, setSplitForm] = useState({
     current_label: 'متابعة الجزء الحالي',
     other_label: 'إكمال الجزء الآخر',
-    current_expected_minutes: 5,
-    other_expected_minutes: 5,
+    shared_expected_minutes: 10,
     other_assignee_id: '',
   })
   const [, setTick] = useState(0)
@@ -155,13 +154,10 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     setSplitError('')
     try {
       const users = await api(`/tasks/${task.id}/split-options`)
-      const firstPart = Math.max(1, Math.ceil(task.expected_minutes / 2))
-      const secondPart = Math.max(1, task.expected_minutes - firstPart)
       setSplitUsers(users)
       setSplitForm((current) => ({
         ...current,
-        current_expected_minutes: firstPart,
-        other_expected_minutes: secondPart,
+        shared_expected_minutes: task.split_expected_minutes || task.expected_minutes,
         other_assignee_id: users[0]?.id || '',
       }))
       setSplitOpen(true)
@@ -179,8 +175,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         method: 'POST',
         body: JSON.stringify({
           ...splitForm,
-          current_expected_minutes: Number(splitForm.current_expected_minutes),
-          other_expected_minutes: Number(splitForm.other_expected_minutes),
+          shared_expected_minutes: Number(splitForm.shared_expected_minutes),
           other_assignee_id: Number(splitForm.other_assignee_id),
         }),
       })
@@ -230,15 +225,18 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
           <div className="split-task-panel-head">
             <div>
               <h2>تقسيم المهمة بين موظفين</h2>
-              <p>سيبقى الجزء 1.1 مع الموظف الحالي ووقته المسجل، وسيبدأ الجزء 1.2 كمهمة جديدة بانتظار التنفيذ.</p>
+              <p>سيبقى الجزء 1.1 مع الموظف الحالي، وسيشارك الجزآن نفس الوقت المتوقع والمؤقت الفعلي.</p>
             </div>
             <button type="button" onClick={() => setSplitOpen(false)}>إلغاء</button>
           </div>
           <form className="split-task-form" onSubmit={submitSplit}>
+            <label className="split-shared-time">الوقت المتوقع الإجمالي للمهمة بالدقائق
+              <input required min="1" type="number" value={splitForm.shared_expected_minutes} onChange={(event) => setSplitForm({ ...splitForm, shared_expected_minutes: event.target.value })} />
+              <small>وقت واحد مشترك للجزأين، وليس حصة منفصلة لكل موظف.</small>
+            </label>
             <fieldset>
               <legend>الجزء 1.1 - {task.assignee?.full_name_ar}</legend>
               <label>وصف الجزء<input required maxLength="120" value={splitForm.current_label} onChange={(event) => setSplitForm({ ...splitForm, current_label: event.target.value })} /></label>
-              <label>الوقت المتوقع بالدقائق<input required min="1" type="number" value={splitForm.current_expected_minutes} onChange={(event) => setSplitForm({ ...splitForm, current_expected_minutes: event.target.value })} /></label>
             </fieldset>
             <fieldset>
               <legend>الجزء 1.2</legend>
@@ -249,7 +247,6 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
                   {splitUsers.map((member) => <option key={member.id} value={member.id}>{member.full_name_ar}</option>)}
                 </select>
               </label>
-              <label>الوقت المتوقع بالدقائق<input required min="1" type="number" value={splitForm.other_expected_minutes} onChange={(event) => setSplitForm({ ...splitForm, other_expected_minutes: event.target.value })} /></label>
             </fieldset>
             <button className="primary" disabled={splitSaving || !splitUsers.length}>{splitSaving ? 'جارٍ التقسيم...' : 'تأكيد التقسيم والإسناد'}</button>
           </form>
@@ -260,7 +257,7 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <div><span>الأولوية</span><strong>{priorityLabels[task.priority]}</strong></div>
         <div><span>المكلف</span><strong>{task.assignee?.full_name_ar}</strong></div>
         <div><span>القسم</span><strong>{task.department?.name_ar}</strong></div>
-        <div><span>الوقت المتوقع</span><strong>{task.expected_minutes} دقيقة{task.split_group_id ? ` للجزء · ${timerExpectedMinutes(task)} دقيقة إجمالي` : ''}</strong></div>
+        <div><span>الوقت المتوقع</span><strong>{timerExpectedMinutes(task)} دقيقة{task.split_group_id ? ' إجمالي مشترك' : ''}</strong></div>
         <div><span>الوقت الفعلي</span><strong className={elapsedSeconds(task) > timerExpectedMinutes(task) * 60 ? 'timer-over' : ''}>{formatDuration(elapsedSeconds(task))}</strong></div>
         <div><span>تاريخ الإسناد</span><strong>{task.due_date}</strong></div>
         <div><span>بدأت في</span><strong>{formatDateTime(task.started_at)}</strong></div>
