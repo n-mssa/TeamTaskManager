@@ -41,6 +41,44 @@ def visible_task_query(db: Session, user: User):
     return query
 
 
+def hydrate_shared_sanads(db: Session, tasks: list[Task]):
+    split_groups = {task.split_group_id for task in tasks if task.split_group_id}
+    if not split_groups:
+        return tasks
+    rows = (
+        db.query(Task.split_group_id, TaskAttachment)
+        .join(TaskAttachment, TaskAttachment.task_id == Task.id)
+        .filter(
+            Task.split_group_id.in_(split_groups),
+            Task.deleted_at.is_(None),
+            TaskAttachment.attachment_kind == "sanad",
+        )
+        .order_by(TaskAttachment.created_at.desc())
+        .all()
+    )
+    sanad_by_group = {}
+    for group_id, attachment in rows:
+        sanad_by_group.setdefault(group_id, attachment)
+    for task in tasks:
+        if task.split_group_id and not any(attachment.attachment_kind == "sanad" for attachment in task.attachments):
+            task._shared_sanad_attachment = sanad_by_group.get(task.split_group_id)
+    return tasks
+
+
+def attachment_for_task_or_split_group(db: Session, task: Task, attachment_id: int):
+    attachment = db.query(TaskAttachment).filter(TaskAttachment.id == attachment_id).first()
+    if not attachment:
+        return None
+    if attachment.task_id == task.id:
+        return attachment
+    if not task.split_group_id or attachment.attachment_kind != "sanad":
+        return None
+    source_task = db.query(Task).filter(Task.id == attachment.task_id, Task.deleted_at.is_(None)).first()
+    if not source_task or source_task.split_group_id != task.split_group_id:
+        return None
+    return attachment
+
+
 def validate_status_reasons(
     task: Optional[Task],
     status_value: TaskStatus,
@@ -269,14 +307,14 @@ def list_tasks(
     if date_filters:
         query = query.filter(or_(and_(*date_filters), Task.status == TaskStatus.blocked))
     if overdue:
-        tasks = query.order_by(Task.due_date.desc(), Task.id.desc()).all()
+        tasks = hydrate_shared_sanads(db, query.order_by(Task.due_date.desc(), Task.id.desc()).all())
         return [
             task
             for task in tasks
             if task.status == TaskStatus.delayed
             or ((task.is_over_expected or task.is_eod_overdue) and task.status not in {TaskStatus.done, TaskStatus.cancelled})
         ]
-    return query.order_by(Task.due_date.desc(), Task.id.desc()).all()
+    return hydrate_shared_sanads(db, query.order_by(Task.due_date.desc(), Task.id.desc()).all())
 
 
 @router.post("", response_model=TaskOut)
@@ -364,7 +402,7 @@ def auto_pause_visible_in_progress(payload: AutoPauseRun, db: Session = Depends(
     db.commit()
     for task in tasks:
         db.refresh(task)
-    return tasks
+    return hydrate_shared_sanads(db, tasks)
 
 
 @router.get("/{task_id}/split-options", response_model=list[UserOut])
@@ -457,18 +495,19 @@ def split_task(
     db.commit()
     db.refresh(task)
     db.refresh(other_task)
-    return [task, other_task]
+    return hydrate_shared_sanads(db, [task, other_task])
 
 
 @router.get("/{task_id}", response_model=TaskOut)
 def get_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return get_visible_task_or_403(db, task_id, current_user)
+    task = get_visible_task_or_403(db, task_id, current_user)
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.get("/{task_id}/attachments/{attachment_id}/download")
 def download_attachment(task_id: int, attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    get_visible_task_or_403(db, task_id, current_user)
-    attachment = db.query(TaskAttachment).filter(TaskAttachment.id == attachment_id, TaskAttachment.task_id == task_id).first()
+    task = get_visible_task_or_403(db, task_id, current_user)
+    attachment = attachment_for_task_or_split_group(db, task, attachment_id)
     if not attachment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
     content, content_type = download_object(attachment.stored_filename)
@@ -512,7 +551,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
         notify_task_assigned(db, task, task.assigned_to_user_id)
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.patch("/{task_id}/self-created-approval", response_model=TaskOut)
@@ -527,7 +566,7 @@ def review_self_created_task(task_id: int, payload: SelfCreatedApprovalUpdate, d
     task.self_created_approved_at = datetime.now(timezone.utc) if payload.approved else None
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.post("/{task_id}/auto-pause-cancel", response_model=TaskOut)
@@ -536,7 +575,7 @@ def cancel_auto_pause(task_id: int, payload: AutoPauseCancel, db: Session = Depe
     if current_user.id != task.assigned_to_user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the assigned user can cancel automatic pause")
     if task.status != TaskStatus.blocked:
-        return task
+        return hydrate_shared_sanads(db, [task])[0]
     paused_at = payload.paused_at
     if paused_at is None:
         pause_history = (
@@ -558,7 +597,7 @@ def cancel_auto_pause(task_id: int, payload: AutoPauseCancel, db: Session = Depe
     apply_status_effects(task, old_status, task.status, current_user, db)
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.patch("/{task_id}/status", response_model=TaskOut)
@@ -595,7 +634,7 @@ def update_status(task_id: int, payload: TaskStatusUpdate, db: Session = Depends
         notify_expected_time_complaint(db, task)
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.patch("/{task_id}/expected-time-review", response_model=TaskOut)
@@ -616,7 +655,7 @@ def review_expected_time(task_id: int, payload: ExpectedTimeReviewUpdate, db: Se
         task.expected_time_complaint_status = "denied"
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.patch("/{task_id}/delay-review", response_model=TaskOut)
@@ -628,7 +667,7 @@ def review_delay_reason(task_id: int, payload: DelayReviewUpdate, db: Session = 
     task.overrun_reason_approved = payload.overrun_reason_approved
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.patch("/{task_id}/production-issue", response_model=TaskOut)
@@ -647,7 +686,7 @@ def update_production_issue(task_id: int, payload: ProductionIssueUpdate, db: Se
     task.production_issue_flagged_at = datetime.now(timezone.utc) if payload.flagged else None
     db.commit()
     db.refresh(task)
-    return task
+    return hydrate_shared_sanads(db, [task])[0]
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
