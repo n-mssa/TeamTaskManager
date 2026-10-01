@@ -200,6 +200,10 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     && !task.split_group_id
     && !['done', 'cancelled'].includes(task.status)
     && (user.role === 'super_admin' || (user.role === 'manager' && user.department_id === task.department_id) || user.id === task.assigned_to_user_id)
+  const displayedAttachments = [...(task.attachments || [])]
+  if (task.shared_sanad_attachment && !displayedAttachments.some((attachment) => attachment.id === task.shared_sanad_attachment.id)) {
+    displayedAttachments.push(task.shared_sanad_attachment)
+  }
   return (
     <section>
       <div className="page-head">
@@ -261,12 +265,12 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
       <article className="panel"><h2>الوصف</h2><p>{task.description || 'لا يوجد وصف.'}</p></article>
       <article className="panel">
         <h2>المرفقات</h2>
-        {task.attachments?.length ? (
+        {displayedAttachments.length ? (
           <div className="attachment-list">
-            {task.attachments.map((attachment) => (
+            {displayedAttachments.map((attachment) => (
               <button key={attachment.id} type="button" onClick={() => downloadAttachment(attachment)}>
                 <strong>{attachment.original_filename}</strong>
-                <small>{formatFileSize(attachment.size_bytes)}</small>
+                <small>{attachment.task_id !== task.id ? `سند مشترك بين أجزاء المهمة · ${formatFileSize(attachment.size_bytes)}` : formatFileSize(attachment.size_bytes)}</small>
               </button>
             ))}
           </div>

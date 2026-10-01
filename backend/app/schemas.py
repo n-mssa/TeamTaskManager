@@ -209,6 +209,7 @@ class TaskOut(TaskBase):
     is_over_expected: bool
     is_eod_overdue: bool = False
     has_sanad: bool = False
+    shared_sanad_attachment: Optional[TaskAttachmentOut] = None
     recurring_template_id: Optional[int] = None
     recurrence_date: Optional[date] = None
     recurrence_frequency: Optional[str] = None

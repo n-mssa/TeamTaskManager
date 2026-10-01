@@ -200,8 +200,13 @@ class Task(Base):
         return now.date() > self.recurrence_date or (now.date() == self.recurrence_date and now.hour >= 17)
 
     @property
+    def shared_sanad_attachment(self):
+        own_sanad = next((attachment for attachment in self.attachments if attachment.attachment_kind == "sanad"), None)
+        return own_sanad or getattr(self, "_shared_sanad_attachment", None)
+
+    @property
     def has_sanad(self):
-        return any(attachment.attachment_kind == "sanad" for attachment in self.attachments)
+        return self.shared_sanad_attachment is not None
 
 
 class TaskComment(Base):

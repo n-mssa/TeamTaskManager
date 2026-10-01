@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Department, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
-from app.routers.tasks import apply_status_effects, split_task, validate_status_reasons, validate_status_transition
+from app.routers.tasks import apply_status_effects, attachment_for_task_or_split_group, hydrate_shared_sanads, split_task, validate_status_reasons, validate_status_transition
 from app.schemas import BillsImportHistoryUpdate, TaskSplitCreate
 from app.routers.users import sync_department_manager
 from app.routers.bills_imports import finance_import_assignee, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
@@ -227,6 +227,33 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(parts[1].assigned_to_user_id, self.aseel.id)
         self.assertEqual(parts[1].split_part, 2)
         self.assertEqual(parts[0].split_group_id, parts[1].split_group_id)
+
+    def test_split_task_can_use_sanad_attached_to_its_sibling(self):
+        self.finance_task.split_group_id = "shared-sanad-group"
+        self.finance_task.split_part = 1
+        self.finance_task.split_total = 2
+        other_task = self.make_task("Finance task 1.2", self.finance.id, self.aseel.id)
+        other_task.split_group_id = "shared-sanad-group"
+        other_task.split_part = 2
+        other_task.split_total = 2
+        self.db.flush()
+        attachment = TaskAttachment(
+            task_id=self.finance_task.id,
+            uploaded_by_user_id=self.bills_user.id,
+            original_filename="sanad.jpg",
+            stored_filename="tasks/shared-sanad.jpg",
+            content_type="image/jpeg",
+            size_bytes=100,
+            attachment_kind="sanad",
+        )
+        self.db.add(attachment)
+        self.db.commit()
+
+        hydrate_shared_sanads(self.db, [other_task])
+
+        self.assertTrue(other_task.has_sanad)
+        self.assertEqual(other_task.shared_sanad_attachment.id, attachment.id)
+        self.assertEqual(attachment_for_task_or_split_group(self.db, other_task, attachment.id).id, attachment.id)
 
     def test_sanad_notification_goes_to_active_finance_team_members(self):
         recipients = sanad_notification_recipient_ids(self.db, self.finance_task, self.bills_user.id)
