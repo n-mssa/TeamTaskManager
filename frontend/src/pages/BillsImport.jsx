@@ -252,7 +252,7 @@ export default function BillsImport() {
           {historyError && <p className="error">{historyError}</p>}
           {historyLoading ? <div className="empty-state compact">جارٍ تحميل السجل...</div> : history.length ? (
             <div className="table-wrap bills-history-table"><table>
-              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>ملاحظات</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th><th>تعديل</th></tr></thead>
+              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>ملاحظات</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th><th className="bills-actions-column">الإجراءات</th></tr></thead>
               <tbody>{history.map((item) => {
                 const isEditing = editingHistoryId === item.id
                 return <tr key={item.id} className={isEditing ? 'bills-history-editing' : ''}>
@@ -280,10 +280,10 @@ export default function BillsImport() {
                   {item.has_sanad && <small title={item.sanad_filename}>تم الإرفاق</small>}
                 </div></td>
                 <td>{formatDateTime(item.created_at)}</td>
-                <td><div className="bills-history-edit-actions">
+                <td className="bills-actions-column"><div className="bills-history-edit-actions">
                   {isEditing ? <>
-                    <button type="button" className="icon-button save" aria-label="حفظ التعديلات" title="حفظ التعديلات" disabled={savingHistoryId === item.id} onClick={() => saveHistoryEdit(item)}><Check size={15} /></button>
-                    <button type="button" className="icon-button" aria-label="إلغاء التعديل" title="إلغاء التعديل" disabled={savingHistoryId === item.id} onClick={cancelHistoryEdit}><X size={15} /></button>
+                    <button type="button" className="save" disabled={savingHistoryId === item.id} onClick={() => saveHistoryEdit(item)}><Check size={15} />{savingHistoryId === item.id ? 'جارٍ الحفظ...' : 'حفظ'}</button>
+                    <button type="button" className="cancel" disabled={savingHistoryId === item.id} onClick={cancelHistoryEdit}><X size={15} />إلغاء</button>
                   </> : <button type="button" className="icon-button" aria-label="تعديل المهمة" title="تعديل الأسماء والتاريخ والملاحظات" onClick={() => startHistoryEdit(item)}><Pencil size={15} /></button>}
                 </div></td>
               </tr>
