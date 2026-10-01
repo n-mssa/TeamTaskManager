@@ -2149,16 +2149,12 @@ th {
 }
 
 .bills-history-table .bills-actions-column {
-  position: sticky;
-  inset-inline-end: 0;
-  z-index: 2;
-  min-width: 104px;
+  width: 120px;
+  min-width: 120px;
   background: var(--surface);
-  box-shadow: -8px 0 14px -14px rgba(15, 23, 42, 0.45);
 }
 
 .bills-history-table thead .bills-actions-column {
-  z-index: 3;
   background: var(--surface-soft);
 }
 
