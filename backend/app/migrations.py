@@ -31,6 +31,10 @@ TASK_COLUMNS = {
     "billing_work_order_id": "VARCHAR(80)",
     "billing_customer_name": "VARCHAR(220)",
     "billing_material_name": "VARCHAR(320)",
+    "split_group_id": "VARCHAR(36)",
+    "split_part": "INTEGER",
+    "split_total": "INTEGER",
+    "split_label": "VARCHAR(120)",
 }
 
 USER_COLUMNS = {
@@ -54,6 +58,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_notifications_user_read_created ON notifications (user_id, read_at, created_at DESC)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_task_recurring_occurrence ON tasks (recurring_template_id, recurrence_date) WHERE recurring_template_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_billing_import_key ON tasks (billing_import_key) WHERE billing_import_key IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS ix_tasks_split_group ON tasks (split_group_id) WHERE split_group_id IS NOT NULL",
 ]
 
 

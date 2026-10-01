@@ -9,7 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base
 from app.models import Department, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
-from app.routers.tasks import apply_status_effects, validate_status_reasons, validate_status_transition
+from app.routers.tasks import apply_status_effects, split_task, validate_status_reasons, validate_status_transition
+from app.schemas import TaskSplitCreate
 from app.routers.users import sync_department_manager
 from app.routers.bills_imports import finance_import_assignee, parse_rows, title_date
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
@@ -117,7 +118,7 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.db = sessionmaker(bind=engine)()
 
         self.general = Department(name_ar="General", is_restricted=False)
-        self.finance = Department(name_ar="Finance", is_restricted=True)
+        self.finance = Department(name_ar="Finance", name_en="Finance", is_restricted=True)
         self.db.add_all([self.general, self.finance])
         self.db.flush()
 
@@ -199,6 +200,33 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.db.commit()
         assignee, _ = finance_import_assignee(self.db, self.finance)
         self.assertEqual(assignee.id, self.finance_employee.id)
+
+    def test_assignee_can_split_finance_task_to_another_finance_user(self):
+        self.finance_task.status = TaskStatus.in_progress
+        self.finance_task.work_seconds = 180
+        self.db.commit()
+
+        parts = split_task(
+            self.finance_task.id,
+            TaskSplitCreate(
+                current_label="Review",
+                other_label="Add bill",
+                current_expected_minutes=20,
+                other_expected_minutes=10,
+                other_assignee_id=self.aseel.id,
+            ),
+            self.db,
+            self.finance_employee,
+        )
+
+        self.assertEqual(len(parts), 2)
+        self.assertEqual(parts[0].status, TaskStatus.in_progress)
+        self.assertEqual(parts[0].work_seconds, 180)
+        self.assertEqual(parts[0].split_part, 1)
+        self.assertEqual(parts[1].status, TaskStatus.pending)
+        self.assertEqual(parts[1].assigned_to_user_id, self.aseel.id)
+        self.assertEqual(parts[1].split_part, 2)
+        self.assertEqual(parts[0].split_group_id, parts[1].split_group_id)
 
 
 class RecurringTaskScheduleTests(unittest.TestCase):

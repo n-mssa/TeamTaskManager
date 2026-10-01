@@ -13,7 +13,7 @@ from ..auth import get_current_user
 from ..database import get_db
 from ..models import DelayReasonCategory, Department, Notification, Task, TaskAttachment, TaskComment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
 from ..permissions import MANAGEMENT_ROLES, assert_can_manage_task_payload, get_visible_task_or_403, require_manager_or_admin
-from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, CommentUpdate, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskStatusUpdate, TaskUpdate
+from ..schemas import AutoPauseCancel, AutoPauseRun, CommentCreate, CommentOut, CommentUpdate, DelayReviewUpdate, ExpectedTimeReviewUpdate, HistoryOut, ProductionIssueUpdate, SelfCreatedApprovalUpdate, TaskCreate, TaskDelete, TaskOut, TaskSplitCreate, TaskStatusUpdate, TaskUpdate, UserOut
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -135,6 +135,33 @@ def notify_task_assigned(db: Session, task: Task, assignee_id: int):
             notification_type="task_assigned",
         )
     )
+
+
+def is_finance_department(department: Optional[Department]) -> bool:
+    if not department:
+        return False
+    return (department.name_en or "").strip().lower() == "finance" or department.name_ar == "المالية"
+
+
+def assert_can_split_finance_task(task: Task, user: User):
+    if not is_finance_department(task.department):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only Finance tasks can be split")
+    if task.split_group_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This task has already been split")
+    if task.status in {TaskStatus.done, TaskStatus.cancelled}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Completed or cancelled tasks cannot be split")
+    allowed = (
+        user.role == UserRole.super_admin
+        or (user.role == UserRole.manager and user.department_id == task.department_id)
+        or user.id == task.assigned_to_user_id
+    )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot split this task")
+
+
+def make_split_title(base_title: str, part: int, label: str) -> str:
+    suffix = f" - 1.{part} - {label.strip()}"
+    return f"{base_title[:max(1, 220 - len(suffix))].rstrip()}{suffix}"
 
 
 def notify_expected_time_complaint(db: Session, task: Task):
@@ -338,6 +365,99 @@ def auto_pause_visible_in_progress(payload: AutoPauseRun, db: Session = Depends(
     for task in tasks:
         db.refresh(task)
     return tasks
+
+
+@router.get("/{task_id}/split-options", response_model=list[UserOut])
+def get_split_options(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    assert_can_split_finance_task(task, current_user)
+    return (
+        db.query(User)
+        .filter(
+            User.department_id == task.department_id,
+            User.is_active.is_(True),
+            User.role != UserRole.bills_user,
+            User.id != task.assigned_to_user_id,
+        )
+        .order_by(User.full_name_ar.asc())
+        .all()
+    )
+
+
+@router.post("/{task_id}/split", response_model=list[TaskOut])
+def split_task(
+    task_id: int,
+    payload: TaskSplitCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = get_visible_task_or_403(db, task_id, current_user)
+    assert_can_split_finance_task(task, current_user)
+    other_assignee = (
+        db.query(User)
+        .filter(
+            User.id == payload.other_assignee_id,
+            User.department_id == task.department_id,
+            User.is_active.is_(True),
+            User.role != UserRole.bills_user,
+        )
+        .first()
+    )
+    if not other_assignee:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose an active Finance team member")
+    if other_assignee.id == task.assigned_to_user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The second part must be assigned to another team member")
+
+    current_label = payload.current_label.strip()
+    other_label = payload.other_label.strip()
+    if not current_label or not other_label:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Both task-part descriptions are required")
+    group_id = str(uuid4())
+    base_title = task.title
+    task.title = make_split_title(base_title, 1, current_label)
+    task.expected_minutes = payload.current_expected_minutes
+    task.split_group_id = group_id
+    task.split_part = 1
+    task.split_total = 2
+    task.split_label = current_label
+
+    other_task = Task(
+        title=make_split_title(base_title, 2, other_label),
+        description=task.description,
+        department_id=task.department_id,
+        assigned_to_user_id=other_assignee.id,
+        created_by_user_id=current_user.id,
+        priority=task.priority,
+        status=TaskStatus.pending,
+        expected_minutes=payload.other_expected_minutes,
+        due_date=task.due_date,
+        manager_notes=task.manager_notes,
+        self_created_approved=True,
+        billing_customer_rep=task.billing_customer_rep,
+        billing_work_order_id=task.billing_work_order_id,
+        billing_customer_name=task.billing_customer_name,
+        billing_material_name=task.billing_material_name,
+        split_group_id=group_id,
+        split_part=2,
+        split_total=2,
+        split_label=other_label,
+    )
+    db.add(other_task)
+    db.flush()
+    apply_status_effects(other_task, None, TaskStatus.pending, current_user, db)
+    db.add(
+        Notification(
+            user_id=other_assignee.id,
+            task=other_task,
+            title="تم إسناد جزء من مهمة",
+            message=f"تم إسناد الجزء 1.2 إليك: {other_task.title}",
+            notification_type="task_split_assigned",
+        )
+    )
+    db.commit()
+    db.refresh(task)
+    db.refresh(other_task)
+    return [task, other_task]
 
 
 @router.get("/{task_id}", response_model=TaskOut)

@@ -178,6 +178,14 @@ class TaskDelete(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class TaskSplitCreate(BaseModel):
+    current_label: str = Field(min_length=1, max_length=120)
+    other_label: str = Field(min_length=1, max_length=120)
+    current_expected_minutes: int = Field(gt=0)
+    other_expected_minutes: int = Field(gt=0)
+    other_assignee_id: int
+
+
 class TaskAttachmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -205,6 +213,10 @@ class TaskOut(TaskBase):
     recurrence_date: Optional[date] = None
     recurrence_frequency: Optional[str] = None
     billing_work_order_id: Optional[str] = None
+    split_group_id: Optional[str] = None
+    split_part: Optional[int] = None
+    split_total: Optional[int] = None
+    split_label: Optional[str] = None
     completed_at: Optional[datetime]
     overrun_reason_category: DelayReasonCategory = DelayReasonCategory.on_employee
     overrun_reason_approved: bool = False
