@@ -158,6 +158,7 @@ class Task(Base):
     split_part = Column(Integer, nullable=True)
     split_total = Column(Integer, nullable=True)
     split_label = Column(String(120), nullable=True)
+    split_expected_minutes = Column(Integer, nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     deletion_reason = Column(Text, nullable=True)
@@ -186,7 +187,8 @@ class Task(Base):
 
     @property
     def is_over_expected(self):
-        return self.elapsed_seconds > self.expected_minutes * 60
+        expected_minutes = self.split_expected_minutes or self.expected_minutes
+        return self.elapsed_seconds > expected_minutes * 60
 
     @property
     def is_eod_overdue(self):

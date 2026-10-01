@@ -108,17 +108,61 @@ def validate_status_transition(task: Task, status_value: TaskStatus):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tasks cannot be moved back to pending")
 
 
+def synchronize_split_group_timer(task: Task, old_status: Optional[TaskStatus], new_status: TaskStatus, db: Session):
+    if not task.split_group_id:
+        return
+    group_tasks = (
+        db.query(Task)
+        .filter(Task.split_group_id == task.split_group_id, Task.deleted_at.is_(None))
+        .all()
+    )
+    other_tasks = [item for item in group_tasks if item.id != task.id]
+    others_running = any(item.status == TaskStatus.in_progress for item in other_tasks)
+    was_running = old_status == TaskStatus.in_progress or others_running
+    is_running = new_status == TaskStatus.in_progress or others_running
+    shared_work_seconds = max((item.work_seconds or 0 for item in group_tasks), default=task.work_seconds or 0)
+    timer_values = [item.timer_started_at for item in group_tasks if item.timer_started_at]
+    shared_started_at = min(timer_values, key=lambda value: value.timestamp()) if timer_values else None
+    now = datetime.now(timezone.utc)
+
+    if was_running and not is_running and shared_started_at:
+        segment_end = now if shared_started_at.tzinfo else datetime.utcnow()
+        shared_work_seconds += max(0, int((segment_end - shared_started_at).total_seconds()))
+        shared_started_at = None
+    elif is_running and not shared_started_at:
+        shared_started_at = now
+
+    for group_task in group_tasks:
+        group_task.work_seconds = shared_work_seconds
+        group_task.timer_started_at = shared_started_at if is_running else None
+
+
+def synchronize_split_expected_minutes(task: Task, db: Session):
+    if not task.split_group_id:
+        return
+    group_tasks = (
+        db.query(Task)
+        .filter(Task.split_group_id == task.split_group_id, Task.deleted_at.is_(None))
+        .all()
+    )
+    shared_expected_minutes = sum(item.expected_minutes or 0 for item in group_tasks)
+    for group_task in group_tasks:
+        group_task.split_expected_minutes = shared_expected_minutes
+
+
 def apply_status_effects(task: Task, old_status: Optional[TaskStatus], new_status: TaskStatus, changed_by: User, db: Session):
     now = datetime.now(timezone.utc)
-    if old_status == TaskStatus.in_progress and new_status != TaskStatus.in_progress and task.timer_started_at:
+    if not task.split_group_id and old_status == TaskStatus.in_progress and new_status != TaskStatus.in_progress and task.timer_started_at:
         started_at = task.timer_started_at
         segment_end = now if started_at.tzinfo else datetime.utcnow()
         task.work_seconds = (task.work_seconds or 0) + max(0, int((segment_end - started_at).total_seconds()))
         task.timer_started_at = None
-    if new_status == TaskStatus.in_progress and old_status != TaskStatus.in_progress:
+    if not task.split_group_id and new_status == TaskStatus.in_progress and old_status != TaskStatus.in_progress:
         task.timer_started_at = now
         if not task.started_at:
             task.started_at = now
+    elif new_status == TaskStatus.in_progress and old_status != TaskStatus.in_progress and not task.started_at:
+        task.started_at = now
     if new_status == TaskStatus.done and old_status != TaskStatus.done:
         task.completed_at = now
     elif old_status == TaskStatus.done and new_status != TaskStatus.done:
@@ -140,6 +184,7 @@ def apply_status_effects(task: Task, old_status: Optional[TaskStatus], new_statu
                 changed_by_user_id=changed_by.id,
             )
         )
+    synchronize_split_group_timer(task, old_status, new_status, db)
 
 
 def clean_filename(filename: str):
@@ -458,6 +503,7 @@ def split_task(
     task.split_part = 1
     task.split_total = 2
     task.split_label = current_label
+    task.split_expected_minutes = payload.current_expected_minutes + payload.other_expected_minutes
 
     other_task = Task(
         title=make_split_title(base_title, 2, other_label),
@@ -479,6 +525,7 @@ def split_task(
         split_part=2,
         split_total=2,
         split_label=other_label,
+        split_expected_minutes=payload.current_expected_minutes + payload.other_expected_minutes,
     )
     db.add(other_task)
     db.flush()
@@ -546,6 +593,8 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     old_status = task.status
     for key, value in data.items():
         setattr(task, key, value)
+    if "expected_minutes" in data:
+        synchronize_split_expected_minutes(task, db)
     apply_status_effects(task, old_status, task.status, current_user, db)
     if task.assigned_to_user_id != previous_assignee_id:
         notify_task_assigned(db, task, task.assigned_to_user_id)

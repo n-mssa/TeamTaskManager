@@ -227,6 +227,23 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(parts[1].assigned_to_user_id, self.aseel.id)
         self.assertEqual(parts[1].split_part, 2)
         self.assertEqual(parts[0].split_group_id, parts[1].split_group_id)
+        self.assertEqual(parts[0].split_expected_minutes, 30)
+        self.assertEqual(parts[1].split_expected_minutes, 30)
+        self.assertIsNotNone(parts[0].timer_started_at)
+        self.assertEqual(parts[0].timer_started_at, parts[1].timer_started_at)
+
+        parts[1].status = TaskStatus.in_progress
+        apply_status_effects(parts[1], TaskStatus.pending, TaskStatus.in_progress, self.aseel, self.db)
+        parts[0].status = TaskStatus.blocked
+        apply_status_effects(parts[0], TaskStatus.in_progress, TaskStatus.blocked, self.finance_employee, self.db)
+        self.assertIsNotNone(parts[0].timer_started_at)
+        self.assertEqual(parts[0].timer_started_at, parts[1].timer_started_at)
+
+        parts[1].status = TaskStatus.blocked
+        apply_status_effects(parts[1], TaskStatus.in_progress, TaskStatus.blocked, self.aseel, self.db)
+        self.assertIsNone(parts[0].timer_started_at)
+        self.assertIsNone(parts[1].timer_started_at)
+        self.assertEqual(parts[0].work_seconds, parts[1].work_seconds)
 
     def test_split_task_can_use_sanad_attached_to_its_sibling(self):
         self.finance_task.split_group_id = "shared-sanad-group"
