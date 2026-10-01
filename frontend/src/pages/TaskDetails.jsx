@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { API_BASE_URL, api, getToken } from '../api/client'
 import { priorityLabels, statusLabels } from '../utils/labels'
-import { elapsedSeconds, formatDuration } from '../utils/tasks'
+import { elapsedSeconds, formatDuration, timerExpectedMinutes } from '../utils/tasks'
 
 function formatFileSize(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -58,6 +58,10 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
   }
 
   useEffect(() => { load() }, [taskId])
+  useEffect(() => {
+    const refreshTimer = window.setInterval(load, 30_000)
+    return () => window.clearInterval(refreshTimer)
+  }, [taskId])
   useEffect(() => {
     const timer = setInterval(() => setTick((value) => value + 1), 1000)
     return () => clearInterval(timer)
@@ -256,8 +260,8 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
         <div><span>الأولوية</span><strong>{priorityLabels[task.priority]}</strong></div>
         <div><span>المكلف</span><strong>{task.assignee?.full_name_ar}</strong></div>
         <div><span>القسم</span><strong>{task.department?.name_ar}</strong></div>
-        <div><span>الوقت المتوقع</span><strong>{task.expected_minutes} دقيقة</strong></div>
-        <div><span>الوقت الفعلي</span><strong className={elapsedSeconds(task) > task.expected_minutes * 60 ? 'timer-over' : ''}>{formatDuration(elapsedSeconds(task))}</strong></div>
+        <div><span>الوقت المتوقع</span><strong>{task.expected_minutes} دقيقة{task.split_group_id ? ` للجزء · ${timerExpectedMinutes(task)} دقيقة إجمالي` : ''}</strong></div>
+        <div><span>الوقت الفعلي</span><strong className={elapsedSeconds(task) > timerExpectedMinutes(task) * 60 ? 'timer-over' : ''}>{formatDuration(elapsedSeconds(task))}</strong></div>
         <div><span>تاريخ الإسناد</span><strong>{task.due_date}</strong></div>
         <div><span>بدأت في</span><strong>{formatDateTime(task.started_at)}</strong></div>
         <div><span>أنجزت في</span><strong>{formatDateTime(task.completed_at)}</strong></div>

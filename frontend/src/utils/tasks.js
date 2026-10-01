@@ -14,8 +14,12 @@ export function formatDuration(totalSeconds) {
   return `${hours ? `${hours}س ` : ''}${minutes}د ${rest}ث`
 }
 
+export function timerExpectedMinutes(task) {
+  return task.split_expected_minutes || task.expected_minutes
+}
+
 export function isOverExpected(task) {
-  return elapsedSeconds(task) > task.expected_minutes * 60
+  return elapsedSeconds(task) > timerExpectedMinutes(task) * 60
 }
 
 export function isEndOfDayOverdue(task) {
@@ -37,7 +41,7 @@ export function isEndOfDayOverdue(task) {
 }
 
 export function remainingExpectedSeconds(task) {
-  return task.expected_minutes * 60 - elapsedSeconds(task)
+  return timerExpectedMinutes(task) * 60 - elapsedSeconds(task)
 }
 
 export function statusChangePayload(task, nextStatus, user, extra = {}) {
@@ -51,7 +55,7 @@ export function statusChangePayload(task, nextStatus, user, extra = {}) {
     return null
   }
 
-  const exceededExpected = elapsedSeconds(task) > task.expected_minutes * 60
+  const exceededExpected = elapsedSeconds(task) > timerExpectedMinutes(task) * 60
   const isAssignee = user?.id === task.assigned_to_user_id
   if (isAssignee && task.status === 'in_progress' && nextStatus !== 'in_progress' && exceededExpected && !task.overrun_reason_text) {
     return null

@@ -31,6 +31,11 @@ export default function Dashboard({ user, openTask, createTask }) {
     return () => window.removeEventListener('team-tasks-refresh', load)
   }, [status, assignedTo])
 
+  useEffect(() => {
+    const refreshTimer = window.setInterval(load, 30_000)
+    return () => window.clearInterval(refreshTimer)
+  }, [status, assignedTo])
+
   const summary = useMemo(() => {
     const assignedThisMonth = tasks.filter((task) => isCurrentMonth(task.assigned_date || task.due_date))
     const completedThisMonth = tasks.filter((task) => task.status === 'done' && isCurrentMonth(task.completed_at))
@@ -58,6 +63,7 @@ export default function Dashboard({ user, openTask, createTask }) {
     try {
       const updatedTask = await api(`/tasks/${task.id}/status`, { method: 'PATCH', body: JSON.stringify(payload) })
       reconcileTask(updatedTask)
+      await load()
     } catch (err) {
       reconcileTask(task)
       setError(err.message)
@@ -75,6 +81,7 @@ export default function Dashboard({ user, openTask, createTask }) {
         body: JSON.stringify(payload),
       })
       reconcileTask(updatedTask)
+      await load()
       return updatedTask
     } catch (err) {
       reconcileTask(task)

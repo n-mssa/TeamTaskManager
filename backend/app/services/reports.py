@@ -67,7 +67,7 @@ def delay_hours_for_task(task: Task):
     if is_expected_time_complaint_accepted(task):
         return 0
     actual_hours = (task.elapsed_seconds or 0) / 3600
-    expected_hours = (task.expected_minutes or 0) / 60
+    expected_hours = (task.split_expected_minutes or task.expected_minutes or 0) / 60
     return max(actual_hours - expected_hours, 0)
 
 
@@ -170,9 +170,9 @@ def task_row(task: Task):
 def kpi_summary(tasks: list[Task]):
     kpi_tasks = [task for task in tasks if is_kpi_eligible(task)]
     total_estimated_hours = sum((task.expected_minutes or 0) / 60 for task in kpi_tasks)
-    total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 for task in kpi_tasks)
-    total_delay_hours = sum(delay_hours_for_task(task) for task in kpi_tasks)
-    attributable_delay_hours = sum(attributable_delay_hours_for_task(task) for task in kpi_tasks)
+    total_actual_hours = sum((task.elapsed_seconds or 0) / 3600 * report_weight(task) for task in kpi_tasks)
+    total_delay_hours = sum(delay_hours_for_task(task) * report_weight(task) for task in kpi_tasks)
+    attributable_delay_hours = sum(attributable_delay_hours_for_task(task) * report_weight(task) for task in kpi_tasks)
     raw_delay_rate = (attributable_delay_hours / total_estimated_hours * 100) if total_estimated_hours else None
     delay_rate = min(raw_delay_rate, 100) if raw_delay_rate is not None else None
     return {

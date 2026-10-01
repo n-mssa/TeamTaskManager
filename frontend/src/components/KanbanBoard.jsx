@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Clock, CalendarDays, FileCheck2, GripVertical } from 'lucide-react'
 import { api } from '../api/client'
 import { boardColumns, priorityLabels } from '../utils/labels'
-import { elapsedSeconds, formatDuration, isEndOfDayOverdue, isOverExpected } from '../utils/tasks'
+import { elapsedSeconds, formatDuration, isEndOfDayOverdue, isOverExpected, timerExpectedMinutes } from '../utils/tasks'
 import EmptyState from './EmptyState'
 
 export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) {
@@ -23,7 +23,7 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
       tasks.forEach((task) => {
         const needsReason = task.status === 'in_progress'
           && user?.id === task.assigned_to_user_id
-          && elapsedSeconds(task) > task.expected_minutes * 60
+          && elapsedSeconds(task) > timerExpectedMinutes(task) * 60
           && !task.overrun_reason_text
           && !promptedOverruns.current.has(task.id)
         if (!needsReason) return
@@ -377,7 +377,8 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const overExpected = isOverExpected(task)
   const missedEndOfDay = isEndOfDayOverdue(task)
   const visuallyOverdue = overExpected || missedEndOfDay
-  const progress = Math.min(100, Math.round((worked / (task.expected_minutes * 60)) * 100))
+  const sharedExpectedMinutes = timerExpectedMinutes(task)
+  const progress = Math.min(100, Math.round((worked / (sharedExpectedMinutes * 60)) * 100))
   const pendingSelfApproval = task.created_by_user_id === task.assigned_to_user_id && task.self_created_approved === false
   const pausedTooLong = isPausedTooLong(task)
   return (
@@ -410,7 +411,7 @@ function TaskCard({ task, onOpen, onDragStart }) {
       <h3>{task.title}</h3>
       {task.description && <p>{task.description}</p>}
       <div className="task-meta">
-        <span><Clock size={14} />{formatMinutes(task.expected_minutes)}</span>
+        <span><Clock size={14} />{task.split_group_id ? `${formatMinutes(task.expected_minutes)} للجزء · ${formatMinutes(sharedExpectedMinutes)} إجمالي` : formatMinutes(task.expected_minutes)}</span>
         <span><CalendarDays size={14} />إسناد {task.due_date}</span>
       </div>
       <div className={`live-timer ${overExpected ? 'is-over' : ''}`}>

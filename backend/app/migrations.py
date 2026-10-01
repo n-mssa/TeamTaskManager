@@ -35,6 +35,7 @@ TASK_COLUMNS = {
     "split_part": "INTEGER",
     "split_total": "INTEGER",
     "split_label": "VARCHAR(120)",
+    "split_expected_minutes": "INTEGER",
 }
 
 USER_COLUMNS = {
@@ -112,6 +113,23 @@ def apply_migrations():
                 "WHERE status = 'in_progress' AND timer_started_at IS NULL"
             )
         )
+        if engine.dialect.name == "postgresql":
+            connection.execute(
+                text(
+                    "WITH split_timer_state AS ("
+                    "SELECT split_group_id, MAX(COALESCE(work_seconds, 0)) AS shared_work_seconds, "
+                    "SUM(expected_minutes) AS shared_expected_minutes, "
+                    "MIN(timer_started_at) FILTER (WHERE status = 'in_progress') AS shared_started_at, "
+                    "BOOL_OR(status = 'in_progress') AS is_running "
+                    "FROM tasks WHERE split_group_id IS NOT NULL AND deleted_at IS NULL GROUP BY split_group_id"
+                    ") UPDATE tasks AS task SET "
+                    "work_seconds = state.shared_work_seconds, "
+                    "split_expected_minutes = state.shared_expected_minutes, "
+                    "timer_started_at = CASE WHEN state.is_running "
+                    "THEN COALESCE(state.shared_started_at, CURRENT_TIMESTAMP) ELSE NULL END "
+                    "FROM split_timer_state AS state WHERE task.split_group_id = state.split_group_id"
+                )
+            )
         connection.execute(
             text(
                 "UPDATE tasks "

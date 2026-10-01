@@ -218,6 +218,7 @@ class TaskOut(TaskBase):
     split_part: Optional[int] = None
     split_total: Optional[int] = None
     split_label: Optional[str] = None
+    split_expected_minutes: Optional[int] = None
     completed_at: Optional[datetime]
     overrun_reason_category: DelayReasonCategory = DelayReasonCategory.on_employee
     overrun_reason_approved: bool = False
