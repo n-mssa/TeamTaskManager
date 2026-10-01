@@ -252,7 +252,7 @@ export default function BillsImport() {
           {historyError && <p className="error">{historyError}</p>}
           {historyLoading ? <div className="empty-state compact">جارٍ تحميل السجل...</div> : history.length ? (
             <div className="table-wrap bills-history-table"><table>
-              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>ملاحظات</th><th>تاريخ المهمة</th><th>الحالة</th><th>السند</th><th>وقت الرفع</th><th className="bills-actions-column">الإجراءات</th></tr></thead>
+              <thead><tr><th>رقم أمر العمل</th><th>اسم العميل</th><th>اسم المادة</th><th>مسؤول الزبون</th><th>ملاحظات</th><th>تاريخ المهمة</th><th>الحالة</th><th className="bills-sanad-column">السند</th><th>وقت الرفع</th><th className="bills-actions-column">الإجراءات</th></tr></thead>
               <tbody>{history.map((item) => {
                 const isEditing = editingHistoryId === item.id
                 return <tr key={item.id} className={isEditing ? 'bills-history-editing' : ''}>
@@ -263,7 +263,7 @@ export default function BillsImport() {
                 <td className="bills-note-cell">{isEditing ? <textarea aria-label="ملاحظات المهمة" maxLength="2000" value={historyEdit.note} onChange={(event) => setHistoryEdit({ ...historyEdit, note: event.target.value })} /> : item.note || '-'}</td>
                 <td>{isEditing ? <input aria-label="تاريخ المهمة" type="date" value={historyEdit.task_date} onChange={(event) => setHistoryEdit({ ...historyEdit, task_date: event.target.value })} /> : item.task_date}</td>
                 <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
-                <td><div className="sanad-actions">
+                <td className="bills-sanad-column"><div className="sanad-actions">
                   {item.has_sanad && <button type="button" className="sanad-view-button" onClick={() => viewSanad(item)}><Eye size={14} />عرض</button>}
                   <label className={`sanad-upload-button ${item.has_sanad ? 'replace' : ''}`}>
                     <ImageUp size={14} />{uploadingSanadId === item.id ? 'جارٍ الرفع...' : item.has_sanad ? 'استبدال' : 'إرفاق سند'}

@@ -2017,16 +2017,31 @@ th {
   box-shadow: none;
 }
 
+.table-wrap.bills-history-table {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.bills-history-table table {
+  min-width: 1420px;
+}
+
 .bills-history-table td {
   vertical-align: middle;
 }
 
 .sanad-actions {
-  min-width: 155px;
+  width: max-content;
+  min-width: 170px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+}
+
+.bills-history-table .bills-sanad-column {
+  width: 180px;
+  min-width: 180px;
 }
 
 .sanad-actions button,
@@ -2045,6 +2060,8 @@ th {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .sanad-upload-button:not(.replace) {
