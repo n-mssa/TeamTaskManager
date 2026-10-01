@@ -2084,6 +2084,20 @@ th {
   min-width: 135px;
 }
 
+.bills-history-editing textarea {
+  min-width: 210px;
+  min-height: 76px;
+  padding: 8px 10px;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.bills-note-cell {
+  min-width: 180px;
+  max-width: 280px;
+  white-space: pre-wrap;
+}
+
 .bills-history-edit-actions {
   display: flex;
   align-items: center;

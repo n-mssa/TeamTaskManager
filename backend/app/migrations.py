@@ -31,6 +31,7 @@ TASK_COLUMNS = {
     "billing_work_order_id": "VARCHAR(80)",
     "billing_customer_name": "VARCHAR(220)",
     "billing_material_name": "VARCHAR(320)",
+    "billing_note": "TEXT",
     "split_group_id": "VARCHAR(36)",
     "split_part": "INTEGER",
     "split_total": "INTEGER",
