@@ -223,7 +223,7 @@ export default function BillsImport() {
         <form className="bills-import-form" onSubmit={inspect}>
         <div className="bills-import-guide">
           <ClipboardPaste size={20} />
-          <div><strong>تنسيق الأعمدة المطلوب</strong><span>مسؤول الزبون، رقم أمر العمل، اسم العميل، اسم المادة، ملاحظات (اختياري). يجب أن يحتوي كل صف على رقم أمر عمل.</span></div>
+          <div><strong>تنسيق الأعمدة المطلوب</strong><span>مسؤول الزبون، رقم أمر العمل، اسم العميل، اسم المادة، ملاحظات (اختياري). يجب أن يحتوي كل صف على رقم أمر عمل. للأكياس السادة التي لا تملك رقم أمر عمل، استخدمي الرقم 0.</span></div>
         </div>
         <label className="bills-paste-field">الصق البيانات هنا
           <textarea
