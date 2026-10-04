@@ -221,12 +221,15 @@ export default function BillsImport() {
           )}
           <div className="table-wrap bills-preview-table">
             <table>
-              <thead><tr><th>الصف</th><th>الحالة</th><th>عنوان المهمة</th><th>مسؤول الزبون</th><th>ملاحظات المهمة</th><th>نتيجة الفحص</th></tr></thead>
+              <thead><tr><th>الصفوف</th><th>الحالة</th><th>عنوان المهمة</th><th>مسؤول الزبون</th><th>ملاحظات المهمة</th><th>نتيجة الفحص</th></tr></thead>
               <tbody>{preview.rows.map((row) => (
                 <tr key={`${row.row_number}-${row.work_order_id}`} className={`bills-row-${row.status}`}>
-                  <td>{row.row_number}</td>
+                  <td>{row.row_count > 1 ? `${row.row_count} صفوف` : row.row_number}</td>
                   <td><span className={`bills-row-status ${row.status}`}>{statusLabel(row.status)}</span></td>
-                  <td>{row.title || `${row.work_order_id} - ${row.customer_name} - ${row.material_name}`}</td>
+                  <td>
+                    <strong>{row.title || `${row.work_order_id} - ${row.customer_name} - ${row.material_name}`}</strong>
+                    {row.row_count > 1 && <small className="bills-group-details">{row.work_order_id}<br />{row.material_name}</small>}
+                  </td>
                   <td>{row.customer_rep || '-'}</td>
                   <td>{row.note || '-'}</td>
                   <td>{row.message || '-'}</td>

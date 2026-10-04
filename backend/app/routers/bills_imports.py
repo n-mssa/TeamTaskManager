@@ -118,6 +118,93 @@ def row_key(task_date: date, work_order_id: str, customer_name: str, material_na
     return sha256(source.encode("utf-8")).hexdigest()
 
 
+def customer_group_key(task_date: date, customer_name: str) -> str:
+    source = "|".join(("customer-bill", task_date.isoformat(), clean_cell(customer_name).casefold()))
+    return sha256(source.encode("utf-8")).hexdigest()
+
+
+def unique_values(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        cleaned = clean_cell(value)
+        key = cleaned.casefold()
+        if cleaned and key not in seen:
+            seen.add(key)
+            result.append(cleaned)
+    return result
+
+
+def compact_values(values: list[str], separator: str, max_length: int) -> str:
+    combined = separator.join(values)
+    if len(combined) <= max_length:
+        return combined
+    suffix = f" +{max(len(values) - 2, 1)}"
+    prefix = separator.join(values[:2])
+    return f"{prefix[:max_length - len(suffix)]}{suffix}"
+
+
+def grouped_bill_title(task_date: date, customer_name: str, work_order_ids: list[str], material_names: list[str]) -> str:
+    if len(material_names) == 1 and len(work_order_ids) == 1:
+        return f"{work_order_ids[0]} - {customer_name} - {material_names[0]} {title_date(task_date)}"
+    ids_label = "، ".join(work_order_ids[:3])
+    if len(work_order_ids) > 3:
+        ids_label = f"{ids_label} +{len(work_order_ids) - 3}"
+    title = f"{ids_label} - {customer_name} - فاتورة مجمعة ({len(material_names)} مواد) {title_date(task_date)}"
+    if len(title) <= 220:
+        return title
+    fallback = f"{customer_name} - فاتورة مجمعة ({len(work_order_ids)} أوامر عمل) {title_date(task_date)}"
+    return fallback[:220]
+
+
+def grouped_bill_description(customer_rows: list[dict]) -> str:
+    first = customer_rows[0]
+    lines = [f"اسم العميل: {first['customer_name']}", "تفاصيل الفاتورة:"]
+    for row in customer_rows:
+        detail = f"- أمر العمل {row['work_order_id']}: {row['material_name']}"
+        if row["customer_rep"]:
+            detail += f" | مسؤول الزبون: {row['customer_rep']}"
+        if row["note"]:
+            detail += f" | ملاحظات: {row['note']}"
+        lines.append(detail)
+    return "\n".join(lines)
+
+
+def group_rows_by_customer(rows: list[dict], task_date: date) -> list[dict]:
+    grouped = []
+    by_customer = {}
+    for row in rows:
+        if row["status"] == "invalid":
+            grouped.append(row)
+            continue
+        customer_key = clean_cell(row["customer_name"]).casefold()
+        if customer_key not in by_customer:
+            by_customer[customer_key] = []
+        by_customer[customer_key].append(row)
+
+    for customer_rows in by_customer.values():
+        first = customer_rows[0]
+        work_order_ids = unique_values([row["work_order_id"] for row in customer_rows])
+        material_names = unique_values([row["material_name"] for row in customer_rows])
+        customer_reps = unique_values([row["customer_rep"] for row in customer_rows])
+        notes = unique_values([row["note"] for row in customer_rows])
+        grouped.append(
+            {
+                **first,
+                "row_count": len(customer_rows),
+                "customer_rep": compact_values(customer_reps, "، ", 160),
+                "work_order_id": compact_values(work_order_ids, "، ", 80),
+                "material_name": compact_values(material_names, " | ", 320),
+                "note": "\n".join(notes),
+                "title": grouped_bill_title(task_date, first["customer_name"], work_order_ids, material_names),
+                "description": grouped_bill_description(customer_rows),
+                "key": customer_group_key(task_date, first["customer_name"]),
+                "message": f"تم دمج {len(customer_rows)} صفوف للعميل نفسه" if len(customer_rows) > 1 else None,
+            }
+        )
+    return sorted(grouped, key=lambda row: row["row_number"])
+
+
 def billing_description(customer_rep: str, work_order_id: str, customer_name: str, material_name: str, note: str = "") -> str:
     lines = [
         f"مسؤول الزبون: {customer_rep or '-'}",
@@ -190,22 +277,25 @@ def parse_rows(pasted_text: str, task_date: date) -> list[dict]:
 def inspect_import(db: Session, payload: BillsImportRequest):
     department = finance_department(db)
     assignee, _ = finance_import_assignee(db, department)
-    rows = parse_rows(payload.pasted_text, payload.task_date)
+    rows = group_rows_by_customer(parse_rows(payload.pasted_text, payload.task_date), payload.task_date)
     if not rows:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No task rows were found in the pasted text")
-    keys = [row["key"] for row in rows if row["key"]]
-    existing = {
-        value for (value,) in db.query(Task.billing_import_key).filter(Task.billing_import_key.in_(keys)).all()
-    } if keys else set()
-    seen = set()
+    existing_customers = {
+        clean_cell(customer_name).casefold()
+        for (customer_name,) in db.query(Task.billing_customer_name)
+        .filter(
+            Task.due_date == payload.task_date,
+            Task.billing_customer_name.is_not(None),
+            Task.deleted_at.is_(None),
+        )
+        .all()
+    }
     for row in rows:
-        key = row["key"]
-        if not key or row["status"] == "invalid":
+        if not row["key"] or row["status"] == "invalid":
             continue
-        if key in existing or key in seen:
+        if clean_cell(row["customer_name"]).casefold() in existing_customers:
             row["status"] = "duplicate"
-            row["message"] = "تمت إضافة هذا الصف مسبقاً" if key in existing else "الصف مكرر داخل هذه الدفعة"
-        seen.add(key)
+            row["message"] = "تمت إضافة فاتورة لهذا العميل في التاريخ نفسه مسبقاً"
     return department, assignee, rows
 
 
@@ -213,7 +303,14 @@ def result_for(department: Department, assignee: User, rows: list[dict], created
     return BillsImportResult(
         department_name=department.name_ar,
         assignee_name=assignee.full_name_ar,
-        rows=[BillsImportRow(**{key: value for key, value in row.items() if key != "key"}) for row in rows],
+        rows=[
+            BillsImportRow(**{
+                key: value
+                for key, value in row.items()
+                if key not in {"key", "description"}
+            })
+            for row in rows
+        ],
         ready_count=sum(row["status"] == "ready" for row in rows),
         duplicate_count=sum(row["status"] == "duplicate" for row in rows),
         invalid_count=sum(row["status"] == "invalid" for row in rows),
@@ -293,7 +390,9 @@ def update_bills_import_history(
     note = clean_note(payload.note or "")
     if not customer_name or not material_name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Customer and material names are required")
-    title = f"{task.billing_work_order_id} - {customer_name} - {material_name} {title_date(payload.task_date)}"
+    work_order_ids = unique_values((task.billing_work_order_id or "").split("،"))
+    material_names = unique_values(material_name.split(" | "))
+    title = grouped_bill_title(payload.task_date, customer_name, work_order_ids, material_names)
     if len(title) > 220:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The updated task name is longer than 220 characters")
 
@@ -303,7 +402,7 @@ def update_bills_import_history(
     task.billing_customer_name = customer_name
     task.billing_material_name = material_name
     task.billing_note = note or None
-    task.billing_import_key = row_key(payload.task_date, task.billing_work_order_id or "", customer_name, material_name)
+    task.billing_import_key = customer_group_key(payload.task_date, customer_name)
     task.description = billing_description(
         customer_rep,
         task.billing_work_order_id or "",
@@ -425,13 +524,7 @@ def commit_bills_import(payload: BillsImportRequest, db: Session = Depends(get_d
     for row in ready_rows:
         task = Task(
             title=row["title"],
-            description=billing_description(
-                row["customer_rep"],
-                row["work_order_id"],
-                row["customer_name"],
-                row["material_name"],
-                row["note"],
-            ),
+            description=row["description"],
             department_id=department.id,
             assigned_to_user_id=assignee.id,
             created_by_user_id=current_user.id,
