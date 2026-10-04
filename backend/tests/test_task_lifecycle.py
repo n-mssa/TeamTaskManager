@@ -7,12 +7,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Department, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
+from app.models import Department, Notification, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, attachment_for_task_or_split_group, hydrate_shared_sanads, split_task, validate_status_reasons, validate_status_transition
-from app.schemas import BillsImportHistoryUpdate, TaskSplitCreate
+from app.schemas import BillsImportHistoryUpdate, BillsMessageCreate, TaskSplitCreate
 from app.routers.users import sync_department_manager
 from app.routers.bills_imports import finance_import_assignee, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
+from app.routers.notifications import send_bills_message
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 
@@ -168,6 +169,28 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
     def test_bills_user_cannot_access_tasks(self):
         self.assertFalse(can_access_task(self.bills_user, self.finance_task))
         self.assertFalse(can_access_task(self.bills_user, self.general_task))
+
+    def test_finance_team_can_message_active_bills_users(self):
+        result = send_bills_message(
+            BillsMessageCreate(message="  الفواتير جاهزة  "),
+            self.db,
+            self.finance_employee,
+        )
+
+        notification = self.db.query(Notification).filter(Notification.user_id == self.bills_user.id).one()
+        self.assertEqual(result.sent_count, 1)
+        self.assertEqual(notification.notification_type, "finance_message")
+        self.assertEqual(notification.message, "Finance user: الفواتير جاهزة")
+
+    def test_non_finance_user_cannot_message_bills_users(self):
+        with self.assertRaises(HTTPException) as raised:
+            send_bills_message(
+                BillsMessageCreate(message="Not allowed"),
+                self.db,
+                self.general_employee,
+            )
+
+        self.assertEqual(raised.exception.status_code, 403)
 
     def test_report_scope_matches_task_visibility(self):
         admin_ids = {task.id for task in scoped_tasks(self.db, self.admin).all()}

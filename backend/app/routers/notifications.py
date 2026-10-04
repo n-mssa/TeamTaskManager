@@ -1,14 +1,83 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Notification, User
-from ..schemas import NotificationOut
+from ..models import Department, Notification, User, UserRole
+from ..schemas import BillsMessageConfig, BillsMessageCreate, BillsMessageResult, NotificationOut
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+def get_finance_department(db: Session):
+    return (
+        db.query(Department)
+        .filter(
+            (func.lower(func.coalesce(Department.name_en, "")) == "finance")
+            | (Department.name_ar == "المالية")
+        )
+        .first()
+    )
+
+
+def can_message_bills_user(user: User, finance_department: Department | None):
+    if not finance_department or not user.is_active:
+        return False
+    if user.role == UserRole.super_admin:
+        return True
+    return user.department_id == finance_department.id and user.role in {UserRole.manager, UserRole.employee}
+
+
+@router.get("/bills-message/config", response_model=BillsMessageConfig)
+def bills_message_config(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    department = get_finance_department(db)
+    allowed = can_message_bills_user(current_user, department)
+    recipient_count = 0
+    if allowed:
+        recipient_count = (
+            db.query(User)
+            .filter(User.role == UserRole.bills_user, User.is_active.is_(True))
+            .count()
+        )
+    return BillsMessageConfig(can_send=allowed, recipient_count=recipient_count)
+
+
+@router.post("/bills-message", response_model=BillsMessageResult)
+def send_bills_message(
+    payload: BillsMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    department = get_finance_department(db)
+    if not can_message_bills_user(current_user, department):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Finance team only")
+    message = " ".join(payload.message.split()).strip()
+    if not message:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A message is required")
+    recipients = (
+        db.query(User)
+        .filter(User.role == UserRole.bills_user, User.is_active.is_(True))
+        .all()
+    )
+    if not recipients:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No active bills user is available")
+    for recipient in recipients:
+        db.add(
+            Notification(
+                user_id=recipient.id,
+                title="رسالة من قسم المالية",
+                message=f"{current_user.full_name_ar}: {message}",
+                notification_type="finance_message",
+            )
+        )
+    db.commit()
+    return BillsMessageResult(sent_count=len(recipients))
 
 
 @router.get("", response_model=list[NotificationOut])
