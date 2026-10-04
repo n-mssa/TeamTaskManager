@@ -200,9 +200,12 @@ export default function TaskDetails({ taskId, user, editTask, onDeleted }) {
     && !['done', 'cancelled'].includes(task.status)
     && (user.role === 'super_admin' || (user.role === 'manager' && user.department_id === task.department_id) || user.id === task.assigned_to_user_id)
   const displayedAttachments = [...(task.attachments || [])]
-  if (task.shared_sanad_attachment && !displayedAttachments.some((attachment) => attachment.id === task.shared_sanad_attachment.id)) {
-    displayedAttachments.push(task.shared_sanad_attachment)
-  }
+  const sharedSanads = task.shared_sanad_attachments?.length
+    ? task.shared_sanad_attachments
+    : task.shared_sanad_attachment ? [task.shared_sanad_attachment] : []
+  sharedSanads.forEach((attachment) => {
+    if (!displayedAttachments.some((item) => item.id === attachment.id)) displayedAttachments.push(attachment)
+  })
   return (
     <section>
       <div className="page-head">

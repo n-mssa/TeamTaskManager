@@ -10,9 +10,9 @@ from app.database import Base
 from app.models import Department, Notification, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, attachment_for_task_or_split_group, hydrate_shared_sanads, split_task, validate_status_reasons, validate_status_transition
-from app.schemas import BillsImportHistoryUpdate, BillsMessageCreate, TaskSplitCreate
+from app.schemas import BillsImportHistoryUpdate, BillsMessageCreate, TaskDelete, TaskSplitCreate
 from app.routers.users import sync_department_manager
-from app.routers.bills_imports import finance_import_assignee, group_rows_by_customer, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
+from app.routers.bills_imports import delete_bills_import_history, finance_import_assignee, group_rows_by_customer, history_row, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
 from app.routers.notifications import list_bills_todos, mark_all_notifications_read, send_bills_message
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
@@ -358,6 +358,31 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(task.assigned_to_user_id, self.aseel.id)
         self.assertEqual(task.title, "100 - New customer - New material 10/2/2026")
 
+    def test_bills_user_delete_requires_reason_and_notifies_finance_manager(self):
+        task = Task(
+            title="Imported bill to delete",
+            department_id=self.finance.id,
+            assigned_to_user_id=self.aseel.id,
+            created_by_user_id=self.bills_user.id,
+            status=TaskStatus.pending,
+            expected_minutes=10,
+            due_date=date(2026, 10, 4),
+            billing_import_key=row_key(date(2026, 10, 4), "100", "Customer", "Material"),
+            billing_work_order_id="100",
+            billing_customer_name="Customer",
+            billing_material_name="Material",
+        )
+        self.db.add(task)
+        self.db.commit()
+
+        delete_bills_import_history(task.id, TaskDelete(reason="Entered by mistake"), self.db, self.bills_user)
+
+        self.assertIsNotNone(task.deleted_at)
+        self.assertEqual(task.deletion_reason, "Entered by mistake")
+        notification = self.db.query(Notification).filter(Notification.user_id == self.finance_manager.id).one()
+        self.assertEqual(notification.notification_type, "bill_task_deleted")
+        self.assertIn("Entered by mistake", notification.message)
+
 
 class SplitTaskReportTests(unittest.TestCase):
     def test_two_split_halves_count_as_one_task(self):
@@ -442,6 +467,31 @@ class BillsImportTests(unittest.TestCase):
         ]
 
         self.assertTrue(task.has_sanad)
+
+    def test_history_row_returns_every_attached_sanad(self):
+        task = Task(
+            id=1,
+            title="Grouped imported bill",
+            department_id=1,
+            assigned_to_user_id=1,
+            created_by_user_id=2,
+            status=TaskStatus.pending,
+            expected_minutes=10,
+            due_date=date.today(),
+            created_at=datetime.now(timezone.utc),
+            billing_work_order_id="100, 101",
+            billing_customer_name="Customer",
+            billing_material_name="Material A | Material B",
+        )
+        task.attachments = [
+            TaskAttachment(id=index, task_id=1, uploaded_by_user_id=2, original_filename=f"sanad-{index}.jpg", stored_filename=f"tasks/1/sanad-{index}.jpg", content_type="image/jpeg", size_bytes=100, attachment_kind="sanad", created_at=datetime.now(timezone.utc))
+            for index in (1, 2)
+        ]
+
+        result = history_row(task)
+
+        self.assertTrue(result.has_sanad)
+        self.assertEqual(len(result.sanads), 2)
 
     def test_parser_carries_forward_merged_style_cells_and_builds_titles(self):
         pasted = (
