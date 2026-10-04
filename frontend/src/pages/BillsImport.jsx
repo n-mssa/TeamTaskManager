@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, CheckCircle2, ClipboardPaste, Eye, FileSpreadsheet, History, ImageUp, Pencil, ShieldCheck, X } from 'lucide-react'
+import { Check, CheckCircle2, ClipboardPaste, Eye, FileSpreadsheet, History, ImageUp, Pencil, ShieldCheck, Trash2, X } from 'lucide-react'
 import { API_BASE_URL, api, getToken } from '../api/client'
 
 function localDateValue() {
@@ -24,6 +24,9 @@ export default function BillsImport() {
   const [uploadingSanadId, setUploadingSanadId] = useState(null)
   const [editingHistoryId, setEditingHistoryId] = useState(null)
   const [savingHistoryId, setSavingHistoryId] = useState(null)
+  const [deletingHistoryItem, setDeletingHistoryItem] = useState(null)
+  const [deletionReason, setDeletionReason] = useState('')
+  const [deletingHistoryId, setDeletingHistoryId] = useState(null)
   const [historyEdit, setHistoryEdit] = useState({ task_date: '', customer_rep: '', customer_name: '', material_name: '', note: '' })
   const readyRows = useMemo(() => preview?.rows?.filter((row) => row.status === 'ready') || [], [preview])
 
@@ -83,20 +86,21 @@ export default function BillsImport() {
     setError('')
   }
 
-  async function uploadSanad(item, file) {
-    if (!file) return
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+  async function uploadSanad(item, selectedFiles) {
+    const files = Array.from(selectedFiles || [])
+    if (!files.length) return
+    if (files.some((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) {
       setHistoryError('يجب أن يكون السند صورة JPG أو PNG أو WEBP.')
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
+    if (files.some((file) => file.size > 10 * 1024 * 1024)) {
       setHistoryError('يجب ألا يتجاوز حجم صورة السند 10 ميجابايت.')
       return
     }
     setUploadingSanadId(item.id)
     setHistoryError('')
     const formData = new FormData()
-    formData.append('sanad', file)
+    files.forEach((file) => formData.append('sanad', file))
     try {
       const updated = await api(`/bills-import/${item.id}/sanad`, { method: 'POST', body: formData })
       setHistory((current) => current.map((row) => row.id === updated.id ? updated : row))
@@ -107,12 +111,12 @@ export default function BillsImport() {
     }
   }
 
-  async function viewSanad(item) {
+  async function viewSanad(item, sanad) {
     setHistoryError('')
     const previewWindow = window.open('', '_blank')
     if (previewWindow) previewWindow.opener = null
     try {
-      const response = await fetch(`${API_BASE_URL}/bills-import/${item.id}/sanad`, {
+      const response = await fetch(`${API_BASE_URL}/bills-import/${item.id}/sanads/${sanad.id}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       })
       if (!response.ok) throw new Error('تعذر فتح صورة السند.')
@@ -121,7 +125,7 @@ export default function BillsImport() {
       else {
         const link = document.createElement('a')
         link.href = objectUrl
-        link.download = item.sanad_filename || 'sanad'
+        link.download = sanad.original_filename || 'sanad'
         link.click()
       }
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
@@ -163,6 +167,39 @@ export default function BillsImport() {
       setHistoryError(err.message)
     } finally {
       setSavingHistoryId(null)
+    }
+  }
+
+  function openHistoryDelete(item) {
+    setHistoryError('')
+    setDeletingHistoryItem(item)
+    setDeletionReason('')
+  }
+
+  function cancelHistoryDelete() {
+    if (deletingHistoryId) return
+    setDeletingHistoryItem(null)
+    setDeletionReason('')
+  }
+
+  async function deleteHistoryItem(event) {
+    event.preventDefault()
+    const reason = deletionReason.trim()
+    if (!deletingHistoryItem || !reason) return
+    setDeletingHistoryId(deletingHistoryItem.id)
+    setHistoryError('')
+    try {
+      await api(`/bills-import/${deletingHistoryItem.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ reason }),
+      })
+      setHistory((current) => current.filter((item) => item.id !== deletingHistoryItem.id))
+      setDeletingHistoryItem(null)
+      setDeletionReason('')
+    } catch (err) {
+      setHistoryError(err.message)
+    } finally {
+      setDeletingHistoryId(null)
     }
   }
 
@@ -267,33 +304,60 @@ export default function BillsImport() {
                 <td>{isEditing ? <input aria-label="تاريخ المهمة" type="date" value={historyEdit.task_date} onChange={(event) => setHistoryEdit({ ...historyEdit, task_date: event.target.value })} /> : item.task_date}</td>
                 <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
                 <td className="bills-sanad-column"><div className="sanad-actions">
-                  {item.has_sanad && <button type="button" className="sanad-view-button" onClick={() => viewSanad(item)}><Eye size={14} />عرض</button>}
+                  {(item.sanads || []).map((sanad, index) => (
+                    <button key={sanad.id} type="button" className="sanad-view-button" title={sanad.original_filename} onClick={() => viewSanad(item, sanad)}>
+                      <Eye size={14} />سند {index + 1}
+                    </button>
+                  ))}
                   <label className={`sanad-upload-button ${item.has_sanad ? 'replace' : ''}`}>
-                    <ImageUp size={14} />{uploadingSanadId === item.id ? 'جارٍ الرفع...' : item.has_sanad ? 'استبدال' : 'إرفاق سند'}
+                    <ImageUp size={14} />{uploadingSanadId === item.id ? 'جارٍ الرفع...' : item.has_sanad ? 'إضافة سند' : 'إرفاق سند'}
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
+                      multiple
                       disabled={uploadingSanadId !== null}
                       onChange={(event) => {
-                        uploadSanad(item, event.target.files?.[0])
+                        uploadSanad(item, event.target.files)
                         event.target.value = ''
                       }}
                     />
                   </label>
-                  {item.has_sanad && <small title={item.sanad_filename}>تم الإرفاق</small>}
+                  {item.has_sanad && <small>{(item.sanads || []).length} سند مرفق</small>}
                 </div></td>
                 <td>{formatDateTime(item.created_at)}</td>
                 <td className="bills-actions-column"><div className="bills-history-edit-actions">
                   {isEditing ? <>
                     <button type="button" className="save" disabled={savingHistoryId === item.id} onClick={() => saveHistoryEdit(item)}><Check size={15} />{savingHistoryId === item.id ? 'جارٍ الحفظ...' : 'حفظ'}</button>
                     <button type="button" className="cancel" disabled={savingHistoryId === item.id} onClick={cancelHistoryEdit}><X size={15} />إلغاء</button>
-                  </> : <button type="button" className="icon-button" aria-label="تعديل المهمة" title="تعديل الأسماء والتاريخ والملاحظات" onClick={() => startHistoryEdit(item)}><Pencil size={15} /></button>}
+                  </> : <>
+                    <button type="button" className="icon-button" aria-label="تعديل المهمة" title="تعديل الأسماء والتاريخ والملاحظات" onClick={() => startHistoryEdit(item)}><Pencil size={15} /></button>
+                    <button type="button" className="icon-button bills-history-delete" aria-label="حذف المهمة" title="حذف المهمة" onClick={() => openHistoryDelete(item)}><Trash2 size={15} /></button>
+                  </>}
                 </div></td>
               </tr>
               })}</tbody>
             </table></div>
           ) : <div className="empty-state"><span className="empty-state-icon"><History size={21} /></span><strong>لا توجد عمليات رفع سابقة</strong><span>ستظهر المهام هنا بعد تأكيد أول دفعة.</span></div>}
         </article>
+      )}
+      {deletingHistoryItem && (
+        <div className="modal-backdrop" role="presentation" onClick={cancelHistoryDelete}>
+          <form className="briefing-modal bills-delete-modal" role="dialog" aria-modal="true" aria-labelledby="bills-delete-title" onSubmit={deleteHistoryItem} onClick={(event) => event.stopPropagation()}>
+            <header className="briefing-head">
+              <div><p className="eyebrow">حذف مهمة فاتورة</p><h2 id="bills-delete-title">لماذا تريدين حذف هذه المهمة؟</h2></div>
+              <button className="icon-button" type="button" onClick={cancelHistoryDelete} aria-label="إغلاق"><X size={17} /></button>
+            </header>
+            <p className="bills-delete-task-title">{deletingHistoryItem.title}</p>
+            <label>سبب الحذف
+              <textarea required autoFocus maxLength="1000" value={deletionReason} onChange={(event) => setDeletionReason(event.target.value)} placeholder="اكتبي سبب الحذف ليصل إلى مدير قسم المالية..." />
+            </label>
+            <p className="bills-delete-note">سيتم إخفاء المهمة وإرسال إشعار إلى مدير قسم المالية مع السبب.</p>
+            <div className="modal-actions">
+              <button type="button" disabled={Boolean(deletingHistoryId)} onClick={cancelHistoryDelete}>إلغاء</button>
+              <button className="danger" type="submit" disabled={Boolean(deletingHistoryId) || !deletionReason.trim()}><Trash2 size={16} />{deletingHistoryId ? 'جارٍ الحذف...' : 'تأكيد الحذف'}</button>
+            </div>
+          </form>
+        </div>
       )}
     </section>
   )

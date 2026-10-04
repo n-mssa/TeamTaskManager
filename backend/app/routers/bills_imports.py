@@ -1,6 +1,6 @@
 import csv
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from hashlib import sha256
 from html import unescape
 from io import StringIO
@@ -16,11 +16,12 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth import get_current_user
 from ..database import get_db
 from ..models import Department, Notification, Task, TaskAttachment, TaskPriority, TaskStatus, TaskStatusHistory, User, UserRole
-from ..schemas import BillsImportAssignee, BillsImportConfigOut, BillsImportConfigUpdate, BillsImportHistoryRow, BillsImportHistoryUpdate, BillsImportRequest, BillsImportResult, BillsImportRow
+from ..schemas import BillsImportAssignee, BillsImportConfigOut, BillsImportConfigUpdate, BillsImportHistoryRow, BillsImportHistoryUpdate, BillsImportRequest, BillsImportResult, BillsImportRow, TaskDelete
 from ..services.storage import delete_objects, download_object, upload_object
 
 router = APIRouter(prefix="/bills-import", tags=["bills import"])
 MAX_SANAD_BYTES = 10 * 1024 * 1024
+MAX_SANADS_PER_TASK = 20
 SANAD_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
@@ -319,7 +320,11 @@ def result_for(department: Department, assignee: User, rows: list[dict], created
 
 
 def history_row(task: Task):
-    sanad = next((attachment for attachment in task.attachments if attachment.attachment_kind == "sanad"), None)
+    sanads = sorted(
+        (attachment for attachment in task.attachments if attachment.attachment_kind == "sanad"),
+        key=lambda attachment: (attachment.created_at.timestamp() if attachment.created_at else 0, attachment.id or 0),
+        reverse=True,
+    )
     return BillsImportHistoryRow(
         id=task.id,
         title=task.title,
@@ -331,8 +336,9 @@ def history_row(task: Task):
         note=task.billing_note,
         status=task.status,
         created_at=task.created_at,
-        has_sanad=sanad is not None,
-        sanad_filename=sanad.original_filename if sanad else None,
+        has_sanad=bool(sanads),
+        sanad_filename=sanads[0].original_filename if sanads else None,
+        sanads=sanads,
     )
 
 
@@ -439,24 +445,21 @@ def sanad_notification_recipient_ids(db: Session, task: Task, uploader_id: int):
 @router.post("/{task_id}/sanad", response_model=BillsImportHistoryRow)
 def upload_sanad(
     task_id: int,
-    sanad: UploadFile = File(...),
+    sanads: list[UploadFile] = File(..., alias="sanad"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_bills_importer(current_user)
     task = bills_task_or_403(db, task_id, current_user)
-    original_filename, stored_filename, size, content, content_type = read_sanad_image(sanad, task.id)
-    existing = db.query(TaskAttachment).filter(TaskAttachment.task_id == task.id, TaskAttachment.attachment_kind == "sanad").first()
-    old_stored_filename = existing.stored_filename if existing else None
-    upload_object(stored_filename, content, content_type)
+    existing_count = db.query(TaskAttachment).filter(TaskAttachment.task_id == task.id, TaskAttachment.attachment_kind == "sanad").count()
+    if existing_count + len(sanads) > MAX_SANADS_PER_TASK:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"A bill task can have up to {MAX_SANADS_PER_TASK} sanad images")
+    files = [read_sanad_image(sanad, task.id) for sanad in sanads]
+    stored_filenames = []
     try:
-        if existing:
-            existing.uploaded_by_user_id = current_user.id
-            existing.original_filename = original_filename
-            existing.stored_filename = stored_filename
-            existing.content_type = content_type
-            existing.size_bytes = size
-        else:
+        for original_filename, stored_filename, size, content, content_type in files:
+            upload_object(stored_filename, content, content_type)
+            stored_filenames.append(stored_filename)
             db.add(
                 TaskAttachment(
                     task_id=task.id,
@@ -469,24 +472,22 @@ def upload_sanad(
                 )
             )
         recipients = sanad_notification_recipient_ids(db, task, current_user.id)
-        action = "تحديث" if existing else "إرفاق"
+        count_label = f" ({len(files)})" if len(files) > 1 else ""
         for user_id in recipients:
             db.add(
                 Notification(
                     user_id=user_id,
                     task_id=task.id,
-                    title=f"تم {action} سند",
-                    message=f"تم {action} سند للمهمة: {task.title}",
+                    title=f"تم إرفاق سند{count_label}",
+                    message=f"تم إرفاق {len(files)} سند للمهمة: {task.title}" if len(files) > 1 else f"تم إرفاق سند للمهمة: {task.title}",
                     notification_type="sanad_attached",
                 )
             )
         db.commit()
     except Exception:
         db.rollback()
-        delete_objects([stored_filename])
+        delete_objects(stored_filenames)
         raise
-    if old_stored_filename:
-        delete_objects([old_stored_filename])
     db.refresh(task)
     return history_row(task)
 
@@ -505,6 +506,65 @@ def download_sanad(task_id: int, db: Session = Depends(get_db), current_user: Us
         media_type=attachment.content_type or content_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
     )
+
+
+@router.get("/{task_id}/sanads/{attachment_id}")
+def download_specific_sanad(task_id: int, attachment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    require_bills_importer(current_user)
+    task = bills_task_or_403(db, task_id, current_user)
+    attachment = (
+        db.query(TaskAttachment)
+        .filter(
+            TaskAttachment.id == attachment_id,
+            TaskAttachment.task_id == task.id,
+            TaskAttachment.attachment_kind == "sanad",
+        )
+        .first()
+    )
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sanad image not found")
+    content, content_type = download_object(attachment.stored_filename)
+    safe_filename = attachment.original_filename.replace('"', "")
+    return Response(
+        content,
+        media_type=attachment.content_type or content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+    )
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_bills_import_history(
+    task_id: int,
+    payload: TaskDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_bills_importer(current_user)
+    task = bills_task_or_403(db, task_id, current_user)
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Deletion reason is required")
+    if task.status == TaskStatus.in_progress and task.timer_started_at:
+        task.work_seconds = task.elapsed_seconds
+        task.timer_started_at = None
+    task.deleted_at = datetime.now(timezone.utc)
+    task.deleted_by_user_id = current_user.id
+    task.deletion_reason = reason
+
+    department = db.query(Department).filter(Department.id == task.department_id).first()
+    manager = None
+    if department and department.manager_id:
+        manager = db.query(User).filter(User.id == department.manager_id, User.is_active.is_(True)).first()
+    if manager and manager.id != current_user.id:
+        db.add(
+            Notification(
+                user_id=manager.id,
+                title="تم حذف مهمة فاتورة",
+                message=f"{current_user.full_name_ar} حذفت المهمة: {task.title}\nالسبب: {reason}",
+                notification_type="bill_task_deleted",
+            )
+        )
+    db.commit()
 
 
 @router.post("/preview", response_model=BillsImportResult)

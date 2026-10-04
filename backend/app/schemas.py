@@ -209,6 +209,7 @@ class TaskOut(TaskBase):
     is_eod_overdue: bool = False
     has_sanad: bool = False
     shared_sanad_attachment: Optional[TaskAttachmentOut] = None
+    shared_sanad_attachments: list[TaskAttachmentOut] = Field(default_factory=list)
     recurring_template_id: Optional[int] = None
     recurrence_date: Optional[date] = None
     recurrence_frequency: Optional[str] = None
@@ -368,6 +369,7 @@ class BillsImportHistoryRow(BaseModel):
     created_at: datetime
     has_sanad: bool = False
     sanad_filename: Optional[str] = None
+    sanads: list[TaskAttachmentOut] = Field(default_factory=list)
 
 
 class BillsImportHistoryUpdate(BaseModel):

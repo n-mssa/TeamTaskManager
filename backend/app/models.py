@@ -205,11 +205,15 @@ class Task(Base):
     @property
     def shared_sanad_attachment(self):
         own_sanad = next((attachment for attachment in self.attachments if attachment.attachment_kind == "sanad"), None)
-        return own_sanad or getattr(self, "_shared_sanad_attachment", None)
+        return own_sanad or next(iter(self.shared_sanad_attachments), None)
+
+    @property
+    def shared_sanad_attachments(self):
+        return getattr(self, "_shared_sanad_attachments", [])
 
     @property
     def has_sanad(self):
-        return self.shared_sanad_attachment is not None
+        return any(attachment.attachment_kind == "sanad" for attachment in self.attachments) or bool(self.shared_sanad_attachments)
 
 
 class TaskComment(Base):

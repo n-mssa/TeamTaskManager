@@ -2266,17 +2266,17 @@ th {
 }
 
 .sanad-actions {
-  width: max-content;
-  min-width: 170px;
+  width: 100%;
+  min-width: 230px;
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .bills-history-table .bills-sanad-column {
-  width: 180px;
-  min-width: 180px;
+  width: 250px;
+  min-width: 250px;
 }
 
 .sanad-actions button,
@@ -2370,6 +2370,48 @@ th {
   color: #047857;
   border-color: #a7f3d0;
   background: #ecfdf5;
+}
+
+.bills-history-edit-actions .bills-history-delete {
+  color: #b42318;
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.bills-delete-modal {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.bills-delete-modal label {
+  display: grid;
+  gap: 7px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.bills-delete-modal textarea {
+  min-height: 110px;
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.bills-delete-task-title,
+.bills-delete-note {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.bills-delete-task-title {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  font-weight: 700;
+}
+
+.bills-delete-note {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .bills-history-edit-actions .save,

@@ -56,12 +56,16 @@ def hydrate_shared_sanads(db: Session, tasks: list[Task]):
         .order_by(TaskAttachment.created_at.desc())
         .all()
     )
-    sanad_by_group = {}
+    sanads_by_group = {}
     for group_id, attachment in rows:
-        sanad_by_group.setdefault(group_id, attachment)
+        sanads_by_group.setdefault(group_id, []).append(attachment)
     for task in tasks:
-        if task.split_group_id and not any(attachment.attachment_kind == "sanad" for attachment in task.attachments):
-            task._shared_sanad_attachment = sanad_by_group.get(task.split_group_id)
+        if task.split_group_id:
+            task._shared_sanad_attachments = [
+                attachment
+                for attachment in sanads_by_group.get(task.split_group_id, [])
+                if attachment.task_id != task.id
+            ]
     return tasks
 
 
