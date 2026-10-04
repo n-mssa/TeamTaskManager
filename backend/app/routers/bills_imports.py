@@ -110,6 +110,11 @@ def clean_note(value: str) -> str:
     return "\n".join(line.strip() for line in decoded.split("\n") if line.strip())
 
 
+def normalize_work_order_id(value: str) -> str:
+    cleaned = clean_cell(value)
+    return "0" if cleaned == "٠" else cleaned
+
+
 def title_date(value: date) -> str:
     return f"{value.month}/{value.day}/{value.year}"
 
@@ -237,6 +242,7 @@ def parse_rows(pasted_text: str, task_date: date) -> list[dict]:
         if len(cells) < 5:
             cells.extend([""] * (5 - len(cells)))
         customer_rep, work_order_id, customer_name = cells[:3]
+        work_order_id = normalize_work_order_id(work_order_id)
         material_name = cells[3]
         note = clean_note(" ".join(cells[4:]))
         customer_rep = customer_rep or previous_rep

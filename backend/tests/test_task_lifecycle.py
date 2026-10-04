@@ -514,6 +514,13 @@ class BillsImportTests(unittest.TestCase):
         self.assertEqual(rows[0]["status"], "invalid")
         self.assertIn("رقم أمر العمل", rows[0]["message"])
 
+    def test_parser_accepts_zero_as_the_plain_bag_work_order_id(self):
+        rows = parse_rows("Abu Omar\t٠\tPlain Bag Customer\tPlain bags", date(2026, 10, 4))
+
+        self.assertEqual(rows[0]["status"], "ready")
+        self.assertEqual(rows[0]["work_order_id"], "0")
+        self.assertTrue(rows[0]["title"].startswith("0 - "))
+
     def test_parser_accepts_an_optional_note_column(self):
         rows = parse_rows(
             "أبو عمر\t12777\tشركة الفخامة\tMK Cards\tيرجى التدقيق قبل الإصدار",
