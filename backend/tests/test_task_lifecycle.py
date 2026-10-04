@@ -12,8 +12,8 @@ from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, attachment_for_task_or_split_group, hydrate_shared_sanads, split_task, validate_status_reasons, validate_status_transition
 from app.schemas import BillsImportHistoryUpdate, BillsMessageCreate, TaskSplitCreate
 from app.routers.users import sync_department_manager
-from app.routers.bills_imports import finance_import_assignee, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
-from app.routers.notifications import send_bills_message
+from app.routers.bills_imports import finance_import_assignee, group_rows_by_customer, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
+from app.routers.notifications import list_bills_todos, mark_all_notifications_read, send_bills_message
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 
@@ -181,6 +181,19 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(result.sent_count, 1)
         self.assertEqual(notification.notification_type, "finance_message")
         self.assertEqual(notification.message, "Finance user: الفواتير جاهزة")
+
+    def test_finance_messages_stay_in_bills_todos_until_completed(self):
+        send_bills_message(BillsMessageCreate(message="Prepare the bills"), self.db, self.finance_employee)
+
+        todos = list_bills_todos(self.db, self.bills_user)
+        self.assertEqual(len(todos), 1)
+
+        mark_all_notifications_read(self.db, self.bills_user)
+        self.assertEqual(len(list_bills_todos(self.db, self.bills_user)), 1)
+
+        todos[0].read_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.assertEqual(list_bills_todos(self.db, self.bills_user), [])
 
     def test_non_finance_user_cannot_message_bills_users(self):
         with self.assertRaises(HTTPException) as raised:
@@ -459,6 +472,23 @@ class BillsImportTests(unittest.TestCase):
 
         self.assertEqual(rows[0]["note"], "يرجى التدقيق قبل الإصدار")
         self.assertEqual(rows[0]["material_name"], "MK Cards")
+
+    def test_rows_for_the_same_customer_are_grouped_into_one_bill_task(self):
+        task_date = date(2026, 10, 4)
+        rows = parse_rows(
+            "أبو عمر\t12777\tشركة الفخامة\tMK Cards\tالأولى\n"
+            "أبو عمر\t12857\tشركة الفخامة\tEnvelope\tالثانية",
+            task_date,
+        )
+
+        grouped = group_rows_by_customer(rows, task_date)
+
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["row_count"], 2)
+        self.assertEqual(grouped[0]["work_order_id"], "12777، 12857")
+        self.assertIn("فاتورة مجمعة", grouped[0]["title"])
+        self.assertIn("أمر العمل 12777: MK Cards", grouped[0]["description"])
+        self.assertIn("أمر العمل 12857: Envelope", grouped[0]["description"])
 
     def test_title_date_uses_requested_format(self):
         self.assertEqual(title_date(date(2026, 9, 3)), "9/3/2026")

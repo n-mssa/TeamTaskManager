@@ -93,6 +93,25 @@ def list_notifications(
     return query.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(limit).all()
 
 
+@router.get("/bills-todos", response_model=list[NotificationOut])
+def list_bills_todos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.bills_user:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bills user only")
+    return (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.notification_type == "finance_message",
+            Notification.read_at.is_(None),
+        )
+        .order_by(Notification.created_at.desc(), Notification.id.desc())
+        .all()
+    )
+
+
 @router.patch("/{notification_id}/read", response_model=NotificationOut)
 def mark_notification_read(
     notification_id: int,
@@ -118,12 +137,13 @@ def mark_all_notifications_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    notifications = (
-        db.query(Notification)
-        .filter(Notification.user_id == current_user.id, Notification.read_at.is_(None))
-        .order_by(Notification.created_at.desc(), Notification.id.desc())
-        .all()
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.read_at.is_(None),
     )
+    if current_user.role == UserRole.bills_user:
+        query = query.filter(Notification.notification_type != "finance_message")
+    notifications = query.order_by(Notification.created_at.desc(), Notification.id.desc()).all()
     now = datetime.now(timezone.utc)
     for notification in notifications:
         notification.read_at = now

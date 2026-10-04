@@ -334,6 +334,7 @@ class BillsImportRequest(BaseModel):
 
 class BillsImportRow(BaseModel):
     row_number: int
+    row_count: int = 1
     customer_rep: str = ""
     work_order_id: str = ""
     customer_name: str = ""

@@ -1836,9 +1836,154 @@ th {
 }
 
 .bills-workspace-main {
-  width: min(1380px, calc(100% - 32px));
+  width: min(1720px, calc(100% - 32px));
   margin: 0 auto;
   padding: 34px 0 60px;
+}
+
+.bills-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(270px, 310px) minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.bills-todo-column {
+  position: sticky;
+  top: 96px;
+  max-height: calc(100vh - 118px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.bills-todo-column > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bills-todo-column h2,
+.bills-todo-column .eyebrow,
+.bills-todo-hint,
+.bills-todo-item p {
+  margin: 0;
+}
+
+.bills-todo-column h2 {
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.bills-todo-count {
+  min-width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 7px;
+  color: #6d28d9;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bills-todo-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.bills-todo-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow-y: auto;
+  padding-inline-end: 2px;
+}
+
+.bills-todo-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  background: #faf8ff;
+}
+
+.bills-todo-item > svg {
+  margin-top: 2px;
+  color: #7c3aed;
+}
+
+.bills-todo-item > div {
+  min-width: 0;
+}
+
+.bills-todo-item strong,
+.bills-todo-item p,
+.bills-todo-item small {
+  display: block;
+}
+
+.bills-todo-item strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.bills-todo-item p {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.bills-todo-item small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.bills-todo-item button {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  color: #047857;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.bills-todo-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 28px 14px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.bills-group-details {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .bills-import-page {
@@ -2269,6 +2414,19 @@ th {
   background: #14372b;
 }
 
+:root[data-theme='dark'] .bills-todo-count,
+:root[data-theme='dark'] .bills-todo-item {
+  color: #c4b5fd;
+  border-color: #6d4caf;
+  background: #251d38;
+}
+
+:root[data-theme='dark'] .bills-todo-item button {
+  color: #6ee7b7;
+  border-color: #276749;
+  background: #14372b;
+}
+
 :root[data-theme='dark'] .bills-import-guide {
   color: #93c5fd;
   background: #172b46;
@@ -2280,6 +2438,21 @@ th {
 :root[data-theme='dark'] .bills-row-duplicate td {
   color: var(--muted);
   background: var(--surface-soft);
+}
+
+@media (max-width: 1180px) {
+  .bills-workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .bills-todo-column {
+    position: static;
+    max-height: none;
+  }
+
+  .bills-todo-list {
+    max-height: 300px;
+  }
 }
 
 @media (max-width: 760px) {

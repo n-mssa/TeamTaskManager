@@ -22,6 +22,7 @@ export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('team_tasks_theme') || 'light')
   const [briefing, setBriefing] = useState(null)
   const [notifications, setNotifications] = useState([])
+  const [billsTodos, setBillsTodos] = useState([])
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
@@ -136,6 +137,11 @@ export default function App() {
           }
         })
         .catch(() => {})
+      if (user.role === 'bills_user') {
+        api('/notifications/bills-todos')
+          .then(setBillsTodos)
+          .catch(() => {})
+      }
     }
 
     loadNotifications()
@@ -208,6 +214,7 @@ export default function App() {
     setUser(null)
     setBriefing(null)
     setNotifications([])
+    setBillsTodos([])
     setNotificationsOpen(false)
     setBillsMessageConfig(null)
     setBillsMessageOpen(false)
@@ -242,6 +249,7 @@ export default function App() {
   async function markNotificationRead(notification) {
     await api(`/notifications/${notification.id}/read`, { method: 'PATCH' })
     setNotifications((current) => current.filter((item) => item.id !== notification.id))
+    setBillsTodos((current) => current.filter((item) => item.id !== notification.id))
   }
 
   async function markAllNotificationsRead() {
@@ -252,6 +260,11 @@ export default function App() {
   }
 
   async function openNotification(notification) {
+    if (notification.notification_type === 'finance_message') {
+      setNotificationsOpen(false)
+      setToast(null)
+      return
+    }
     if (notification.notification_type === 'expected_time_complaint' && notification.task_id) {
       try {
         const task = await api(`/tasks/${notification.task_id}`)
@@ -394,6 +407,7 @@ export default function App() {
               onOpenNotification={openNotification}
               onMarkRead={markNotificationRead}
               onMarkAllRead={markAllNotificationsRead}
+              allowMarkAll={false}
               browserPermission={browserNotificationPermission}
               onEnableBrowserNotifications={enableBrowserNotifications}
             />
@@ -401,7 +415,15 @@ export default function App() {
             <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button>
           </div>
         </header>
-        <main className="bills-workspace-main"><BillsImport /></main>
+        <main className="bills-workspace-main">
+          <div className="bills-workspace-layout">
+            <BillsTodoColumn
+              todos={billsTodos}
+              onComplete={markNotificationRead}
+            />
+            <BillsImport />
+          </div>
+        </main>
         {toast && <NotificationToast notification={toast} onOpen={() => openNotification(toast)} onClose={() => setToast(null)} />}
       </div>
     )
@@ -587,6 +609,55 @@ function BillsMessageModal({ recipientCount, onClose }) {
 }
 
 
+function BillsTodoColumn({ todos, onComplete }) {
+  const [completingId, setCompletingId] = useState(null)
+  const [error, setError] = useState('')
+
+  async function complete(todo) {
+    setCompletingId(todo.id)
+    setError('')
+    try {
+      await onComplete(todo)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCompletingId(null)
+    }
+  }
+
+  return (
+    <aside className="bills-todo-column" aria-label="طلبات قسم المالية">
+      <header>
+        <div>
+          <p className="eyebrow">قائمة المطلوب</p>
+          <h2>طلبات قسم المالية</h2>
+        </div>
+        <span className="bills-todo-count">{todos.length}</span>
+      </header>
+      <p className="bills-todo-hint">تبقى الطلبات هنا حتى تضغطي على تم.</p>
+      {error && <p className="error">{error}</p>}
+      <div className="bills-todo-list">
+        {todos.length ? todos.map((todo) => (
+          <article className="bills-todo-item" key={todo.id}>
+            <BellRing size={17} />
+            <div>
+              <strong>{todo.title}</strong>
+              <p>{todo.message}</p>
+              <small>{formatNotificationTime(todo.created_at)}</small>
+            </div>
+            <button type="button" disabled={completingId === todo.id} onClick={() => complete(todo)}>
+              <Check size={15} />{completingId === todo.id ? 'جارٍ...' : 'تم'}
+            </button>
+          </article>
+        )) : (
+          <div className="bills-todo-empty"><Check size={18} /><span>لا توجد طلبات معلقة.</span></div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+
 function NotificationBell({
   notifications,
   open,
@@ -594,6 +665,7 @@ function NotificationBell({
   onOpenNotification,
   onMarkRead,
   onMarkAllRead,
+  allowMarkAll = true,
   browserPermission,
   onEnableBrowserNotifications,
 }) {
@@ -607,7 +679,7 @@ function NotificationBell({
         <div className="notification-menu">
           <header>
             <strong>الإشعارات</strong>
-            {notifications.length > 0 && <button type="button" onClick={onMarkAllRead}>تحديد الكل كمقروء</button>}
+            {allowMarkAll && notifications.length > 0 && <button type="button" onClick={onMarkAllRead}>تحديد الكل كمقروء</button>}
           </header>
           <BrowserNotificationPrompt permission={browserPermission} onEnable={onEnableBrowserNotifications} />
           {notifications.length ? (
@@ -619,9 +691,11 @@ function NotificationBell({
                     <span>{notification.message}</span>
                     <small>{formatNotificationTime(notification.created_at)}</small>
                   </button>
-                  <button className="icon-button" type="button" onClick={() => onMarkRead(notification)} title="تحديد كمقروء" aria-label="تحديد كمقروء">
-                    <Check size={16} />
-                  </button>
+                  {notification.notification_type !== 'finance_message' && (
+                    <button className="icon-button" type="button" onClick={() => onMarkRead(notification)} title="تحديد كمقروء" aria-label="تحديد كمقروء">
+                      <Check size={16} />
+                    </button>
+                  )}
                 </article>
               ))}
             </div>
