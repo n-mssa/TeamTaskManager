@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, BarChart3, Bell, Building2, Check, Clock, ClipboardList, LogOut, Palette, Plus, Users as UsersIcon, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Bell, BellRing, Building2, Check, Clock, ClipboardList, LogOut, Palette, Plus, Send, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
@@ -27,6 +27,8 @@ export default function App() {
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => getBrowserNotificationPermission())
   const [autoPausePrompt, setAutoPausePrompt] = useState(null)
   const [expectedTimeReview, setExpectedTimeReview] = useState(null)
+  const [billsMessageConfig, setBillsMessageConfig] = useState(null)
+  const [billsMessageOpen, setBillsMessageOpen] = useState(false)
   const historyReady = useRef(false)
   const handlingHistoryPop = useRef(false)
   const pendingScrollRestore = useRef(null)
@@ -113,7 +115,7 @@ export default function App() {
   }, [user])
 
   useEffect(() => {
-    if (!user || user.role === 'bills_user') return
+    if (!user) return
     const seenKey = `team_tasks_seen_notifications_${user.id}`
     const seen = new Set(JSON.parse(sessionStorage.getItem(seenKey) || '[]'))
 
@@ -137,9 +139,19 @@ export default function App() {
     }
 
     loadNotifications()
-    const interval = window.setInterval(loadNotifications, 45_000)
+    const interval = window.setInterval(loadNotifications, user.role === 'bills_user' ? 15_000 : 45_000)
     return () => window.clearInterval(interval)
   }, [user, browserNotificationPermission])
+
+  useEffect(() => {
+    if (!user || user.role === 'bills_user') {
+      setBillsMessageConfig(null)
+      return
+    }
+    api('/notifications/bills-message/config')
+      .then(setBillsMessageConfig)
+      .catch(() => setBillsMessageConfig(null))
+  }, [user])
 
   useEffect(() => {
     if (!user || user.role === 'bills_user') return
@@ -197,6 +209,8 @@ export default function App() {
     setBriefing(null)
     setNotifications([])
     setNotificationsOpen(false)
+    setBillsMessageConfig(null)
+    setBillsMessageOpen(false)
     setToast(null)
     setAutoPausePrompt(null)
     setExpectedTimeReview(null)
@@ -372,9 +386,23 @@ export default function App() {
       <div className="bills-workspace">
         <header className="bills-workspace-header">
           <div><span className="brand-mark"><ClipboardList size={18} /></span><div><strong>إدخال مهام المالية</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
-          <div className="topbar-actions"><ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme, user)} /><button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button></div>
+          <div className="topbar-actions">
+            <NotificationBell
+              notifications={notifications}
+              open={notificationsOpen}
+              onToggle={() => setNotificationsOpen((value) => !value)}
+              onOpenNotification={openNotification}
+              onMarkRead={markNotificationRead}
+              onMarkAllRead={markAllNotificationsRead}
+              browserPermission={browserNotificationPermission}
+              onEnableBrowserNotifications={enableBrowserNotifications}
+            />
+            <ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme, user)} />
+            <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={18} /></button>
+          </div>
         </header>
         <main className="bills-workspace-main"><BillsImport /></main>
+        {toast && <NotificationToast notification={toast} onOpen={() => openNotification(toast)} onClose={() => setToast(null)} />}
       </div>
     )
   }
@@ -412,6 +440,11 @@ export default function App() {
         <header className="topbar">
           <div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div>
           <div className="topbar-actions">
+            {billsMessageConfig?.can_send && (
+              <button className="icon-button bills-message-trigger" onClick={() => setBillsMessageOpen(true)} title="إرسال تنبيه لمستخدم الفواتير" aria-label="إرسال تنبيه لمستخدم الفواتير" type="button">
+                <BellRing size={18} />
+              </button>
+            )}
             <NotificationBell
               notifications={notifications}
               open={notificationsOpen}
@@ -451,6 +484,12 @@ export default function App() {
         />
       )}
       {toast && <NotificationToast notification={toast} onOpen={() => openNotification(toast)} onClose={() => setToast(null)} />}
+      {billsMessageOpen && (
+        <BillsMessageModal
+          recipientCount={billsMessageConfig?.recipient_count || 0}
+          onClose={() => setBillsMessageOpen(false)}
+        />
+      )}
       {autoPausePrompt && (
         <AutoPausePrompt
           prompt={autoPausePrompt}
@@ -475,6 +514,78 @@ export default function App() {
 function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('\u00a0')
 }
+
+function BillsMessageModal({ recipientCount, onClose }) {
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [sentCount, setSentCount] = useState(0)
+
+  async function deliverMessage(value) {
+    const nextMessage = value.trim()
+    if (!nextMessage) return
+    setSaving(true)
+    setError('')
+    setSentCount(0)
+    try {
+      const result = await api('/notifications/bills-message', {
+        method: 'POST',
+        body: JSON.stringify({ message: nextMessage }),
+      })
+      setSentCount(result.sent_count)
+      setMessage('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function sendMessage(event) {
+    event.preventDefault()
+    deliverMessage(message)
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="briefing-modal bills-message-modal" role="dialog" aria-modal="true" aria-labelledby="bills-message-title" onClick={(event) => event.stopPropagation()}>
+        <header className="briefing-head">
+          <div>
+            <p className="eyebrow">تنبيه مستخدم الفواتير</p>
+            <h2 id="bills-message-title">ماذا تحتاجون من مسؤول إدخال الفواتير؟</h2>
+            <span>سيصل التنبيه إلى {recipientCount || 'كل'} مستخدمي إدخال الفواتير النشطين.</span>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="إغلاق"><X size={17} /></button>
+        </header>
+        <form className="bills-message-form" onSubmit={sendMessage}>
+          <button className="bills-message-preset" type="button" disabled={saving || recipientCount === 0} onClick={() => deliverMessage('الفواتير جاهزة')}>
+            <BellRing size={17} />{saving ? 'جارٍ الإرسال...' : 'إرسال: الفواتير جاهزة'}
+          </button>
+          <label>الرسالة المطلوبة
+            <textarea
+              autoFocus
+              required
+              maxLength="1000"
+              value={message}
+              onChange={(event) => { setMessage(event.target.value); setError(''); setSentCount(0) }}
+              placeholder="اكتبوا بوضوح ماذا تحتاجون من مسؤول إدخال الفواتير..."
+            />
+            <small>{message.length}/1000</small>
+          </label>
+          {error && <p className="error">{error}</p>}
+          {sentCount > 0 && <p className="success bills-message-success"><Check size={16} />تم إرسال التنبيه بنجاح.</p>}
+          <div className="modal-actions">
+            <button type="button" onClick={onClose}>إغلاق</button>
+            <button className="primary" type="submit" disabled={saving || !message.trim() || recipientCount === 0}>
+              <Send size={16} />{saving ? 'جارٍ الإرسال...' : 'إرسال التنبيه'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
 
 function NotificationBell({
   notifications,

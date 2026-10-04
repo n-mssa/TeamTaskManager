@@ -280,6 +280,19 @@ class NotificationOut(BaseModel):
     created_at: datetime
 
 
+class BillsMessageConfig(BaseModel):
+    can_send: bool
+    recipient_count: int = 0
+
+
+class BillsMessageCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class BillsMessageResult(BaseModel):
+    sent_count: int
+
+
 class ReportRequest(BaseModel):
     start_date: date
     end_date: date
