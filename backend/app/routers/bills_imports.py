@@ -124,9 +124,27 @@ def row_key(task_date: date, work_order_id: str, customer_name: str, material_na
     return sha256(source.encode("utf-8")).hexdigest()
 
 
-def customer_group_key(task_date: date, customer_name: str) -> str:
-    source = "|".join(("customer-bill", task_date.isoformat(), clean_cell(customer_name).casefold()))
+def grouped_bill_key(task_date: date, customer_name: str, work_order_ids: list[str], material_names: list[str]) -> str:
+    normalized_work_orders = sorted(clean_cell(value).casefold() for value in work_order_ids if clean_cell(value))
+    normalized_materials = sorted(clean_cell(value).casefold() for value in material_names if clean_cell(value))
+    source = "|".join(
+        (
+            "grouped-bill",
+            task_date.isoformat(),
+            clean_cell(customer_name).casefold(),
+            "~".join(normalized_work_orders),
+            "~".join(normalized_materials),
+        )
+    )
     return sha256(source.encode("utf-8")).hexdigest()
+
+
+def bill_content_signature(customer_name: str, work_order_id: str, material_name: str):
+    return (
+        clean_cell(customer_name).casefold(),
+        clean_cell(work_order_id).casefold(),
+        clean_cell(material_name).casefold(),
+    )
 
 
 def unique_values(values: list[str]) -> list[str]:
@@ -204,7 +222,7 @@ def group_rows_by_customer(rows: list[dict], task_date: date) -> list[dict]:
                 "note": "\n".join(notes),
                 "title": grouped_bill_title(task_date, first["customer_name"], work_order_ids, material_names),
                 "description": grouped_bill_description(customer_rows),
-                "key": customer_group_key(task_date, first["customer_name"]),
+                "key": grouped_bill_key(task_date, first["customer_name"], work_order_ids, material_names),
                 "message": f"تم دمج {len(customer_rows)} صفوف للعميل نفسه" if len(customer_rows) > 1 else None,
             }
         )
@@ -287,22 +305,32 @@ def inspect_import(db: Session, payload: BillsImportRequest):
     rows = group_rows_by_customer(parse_rows(payload.pasted_text, payload.task_date), payload.task_date)
     if not rows:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No task rows were found in the pasted text")
-    existing_customers = {
-        clean_cell(customer_name).casefold()
-        for (customer_name,) in db.query(Task.billing_customer_name)
+    existing_rows = (
+        db.query(
+            Task.billing_import_key,
+            Task.billing_customer_name,
+            Task.billing_work_order_id,
+            Task.billing_material_name,
+        )
         .filter(
             Task.due_date == payload.task_date,
             Task.billing_customer_name.is_not(None),
             Task.deleted_at.is_(None),
         )
         .all()
+    )
+    existing_keys = {key for key, _, _, _ in existing_rows if key}
+    existing_signatures = {
+        bill_content_signature(customer_name or "", work_order_id or "", material_name or "")
+        for _, customer_name, work_order_id, material_name in existing_rows
     }
     for row in rows:
         if not row["key"] or row["status"] == "invalid":
             continue
-        if clean_cell(row["customer_name"]).casefold() in existing_customers:
+        signature = bill_content_signature(row["customer_name"], row["work_order_id"], row["material_name"])
+        if row["key"] in existing_keys or signature in existing_signatures:
             row["status"] = "duplicate"
-            row["message"] = "تمت إضافة فاتورة لهذا العميل في التاريخ نفسه مسبقاً"
+            row["message"] = "تمت إضافة نفس الفاتورة مسبقاً"
     return department, assignee, rows
 
 
@@ -414,7 +442,7 @@ def update_bills_import_history(
     task.billing_customer_name = customer_name
     task.billing_material_name = material_name
     task.billing_note = note or None
-    task.billing_import_key = customer_group_key(payload.task_date, customer_name)
+    task.billing_import_key = grouped_bill_key(payload.task_date, customer_name, work_order_ids, material_names)
     task.description = billing_description(
         customer_rep,
         task.billing_work_order_id or "",
