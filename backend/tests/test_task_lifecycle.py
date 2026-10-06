@@ -10,9 +10,9 @@ from app.database import Base
 from app.models import Department, Notification, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, attachment_for_task_or_split_group, hydrate_shared_sanads, split_task, validate_status_reasons, validate_status_transition
-from app.schemas import BillsImportHistoryUpdate, BillsMessageCreate, TaskDelete, TaskSplitCreate
+from app.schemas import BillsImportHistoryUpdate, BillsImportRequest, BillsMessageCreate, TaskDelete, TaskSplitCreate
 from app.routers.users import sync_department_manager
-from app.routers.bills_imports import delete_bills_import_history, finance_import_assignee, group_rows_by_customer, history_row, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
+from app.routers.bills_imports import delete_bills_import_history, finance_import_assignee, group_rows_by_customer, history_row, inspect_import, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
 from app.routers.notifications import list_bills_todos, mark_all_notifications_read, send_bills_message
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
@@ -382,6 +382,36 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         notification = self.db.query(Notification).filter(Notification.user_id == self.finance_manager.id).one()
         self.assertEqual(notification.notification_type, "bill_task_deleted")
         self.assertIn("Entered by mistake", notification.message)
+
+    def test_same_customer_can_have_a_different_bill_on_the_same_day(self):
+        task_date = date(2026, 10, 6)
+        existing = Task(
+            title="12681 - Customer - Material A 10/6/2026",
+            department_id=self.finance.id,
+            assigned_to_user_id=self.aseel.id,
+            created_by_user_id=self.bills_user.id,
+            status=TaskStatus.pending,
+            expected_minutes=10,
+            due_date=task_date,
+            billing_import_key=row_key(task_date, "12681", "Customer", "Material A"),
+            billing_work_order_id="12681",
+            billing_customer_name="Customer",
+            billing_material_name="Material A",
+        )
+        self.db.add(existing)
+        self.db.commit()
+
+        _, _, different_bill = inspect_import(
+            self.db,
+            BillsImportRequest(pasted_text="Rep\t12682\tCustomer\tMaterial B", task_date=task_date),
+        )
+        _, _, exact_repeat = inspect_import(
+            self.db,
+            BillsImportRequest(pasted_text="Rep\t12681\tCustomer\tMaterial A", task_date=task_date),
+        )
+
+        self.assertEqual(different_bill[0]["status"], "ready")
+        self.assertEqual(exact_repeat[0]["status"], "duplicate")
 
 
 class SplitTaskReportTests(unittest.TestCase):
