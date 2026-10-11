@@ -173,7 +173,7 @@ Customer representative<TAB>Work order ID<TAB>Customer name<TAB>Material name<TA
 Example:
 
 ```text
-مندوب تجريبي	TEST-001	شركة تجريبية	مادة تجريبية	ملاحظة اختيارية
+مندوب تجريبي	TEST-001	شركة تجريبية	مادة تجريبية	ملاحظة تجريبية
 ```
 
 Import behavior:

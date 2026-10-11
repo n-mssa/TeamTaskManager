@@ -8,7 +8,7 @@ function localDateValue() {
 }
 
 const sample = `مسؤول الزبون\tرقم امر العمل\tاسم العميل\tاسم المادة\tملاحظات
-مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة تجريبية\tملاحظة اختيارية`
+مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة تجريبية\tملاحظة تجريبية`
 
 export default function BillsImport() {
   const [activeTab, setActiveTab] = useState('upload')

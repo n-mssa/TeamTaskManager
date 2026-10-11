@@ -388,28 +388,28 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
     def test_same_customer_can_have_a_different_bill_on_the_same_day(self):
         task_date = date(2026, 10, 6)
         existing = Task(
-            title="TEST-003 - Customer - Material A 10/6/2026",
+            title="TEST-003 - Example Customer - Example Material 10/6/2026",
             department_id=self.finance.id,
             assigned_to_user_id=self.aseel.id,
             created_by_user_id=self.bills_user.id,
             status=TaskStatus.pending,
             expected_minutes=10,
             due_date=task_date,
-            billing_import_key=row_key(task_date, "TEST-003", "Customer", "Material A"),
+            billing_import_key=row_key(task_date, "TEST-003", "Example Customer", "Example Material"),
             billing_work_order_id="TEST-003",
-            billing_customer_name="Customer",
-            billing_material_name="Material A",
+            billing_customer_name="Example Customer",
+            billing_material_name="Example Material",
         )
         self.db.add(existing)
         self.db.commit()
 
         _, _, different_bill = inspect_import(
             self.db,
-            BillsImportRequest(pasted_text="Rep\tTEST-004\tCustomer\tMaterial B", task_date=task_date),
+            BillsImportRequest(pasted_text="Example Rep\tTEST-004\tExample Customer\tAnother Material", task_date=task_date),
         )
         _, _, exact_repeat = inspect_import(
             self.db,
-            BillsImportRequest(pasted_text="Rep\tTEST-003\tCustomer\tMaterial A", task_date=task_date),
+            BillsImportRequest(pasted_text="Example Rep\tTEST-003\tExample Customer\tExample Material", task_date=task_date),
         )
 
         self.assertEqual(different_bill[0]["status"], "ready")
@@ -573,8 +573,8 @@ class BillsImportTests(unittest.TestCase):
     def test_parser_carries_forward_merged_style_cells_and_builds_titles(self):
         pasted = (
             "مسؤول الزبون\tرقم امر العمل\tاسم العميل\tاسم المادة\n"
-            "مندوب تجريبي\tTEST-001\tشركة تجريبية\tعلبة بقلاوة 1500 غ\n"
-            "\tTEST-002\t\tعلبة بقلاوة 1000 غ"
+            "مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة تجريبية أولى\n"
+            "\tTEST-002\t\tمادة تجريبية ثانية"
         )
 
         rows = parse_rows(pasted, date(2026, 9, 30))
@@ -582,11 +582,11 @@ class BillsImportTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1]["customer_rep"], "مندوب تجريبي")
         self.assertEqual(rows[1]["customer_name"], "شركة تجريبية")
-        self.assertEqual(rows[1]["title"], "TEST-002 - شركة تجريبية - علبة بقلاوة 1000 غ 9/30/2026")
+        self.assertEqual(rows[1]["title"], "TEST-002 - شركة تجريبية - مادة تجريبية ثانية 9/30/2026")
         self.assertEqual(rows[1]["status"], "ready")
 
     def test_parser_marks_missing_work_order_as_invalid(self):
-        rows = parse_rows("مندوب تجريبي\t\tشركة العميل\tعلبة", date(2026, 9, 30))
+        rows = parse_rows("مندوب تجريبي\t\tشركة تجريبية\tمادة تجريبية", date(2026, 9, 30))
 
         self.assertEqual(rows[0]["status"], "invalid")
         self.assertIn("رقم أمر العمل", rows[0]["message"])
@@ -600,18 +600,18 @@ class BillsImportTests(unittest.TestCase):
 
     def test_parser_accepts_an_optional_note_column(self):
         rows = parse_rows(
-            "مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة أولى\tيرجى التدقيق قبل الإصدار",
+            "مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة تجريبية\tملاحظة تجريبية",
             date(2026, 9, 30),
         )
 
-        self.assertEqual(rows[0]["note"], "يرجى التدقيق قبل الإصدار")
-        self.assertEqual(rows[0]["material_name"], "مادة أولى")
+        self.assertEqual(rows[0]["note"], "ملاحظة تجريبية")
+        self.assertEqual(rows[0]["material_name"], "مادة تجريبية")
 
     def test_rows_for_the_same_customer_are_grouped_into_one_bill_task(self):
         task_date = date(2026, 10, 4)
         rows = parse_rows(
-            "مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة أولى\tالأولى\n"
-            "مندوب تجريبي\tTEST-002\tشركة تجريبية\tمادة ثانية\tالثانية",
+            "مندوب تجريبي\tTEST-001\tشركة تجريبية\tمادة أولى\tملاحظة أولى\n"
+            "مندوب تجريبي\tTEST-002\tشركة تجريبية\tمادة ثانية\tملاحظة ثانية",
             task_date,
         )
 
