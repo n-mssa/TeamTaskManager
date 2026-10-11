@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import Notification, RecurringTaskTemplate, Task, TaskStatus, TaskStatusHistory, User
+from .auto_pause import pause_missed_end_of_day_tasks
 
 
 AMMAN_TIME_ZONE = ZoneInfo("Asia/Amman")
@@ -93,10 +94,11 @@ def run_recurring_generation():
     db = SessionLocal()
     try:
         generate_due_recurring_tasks(db)
+        pause_missed_end_of_day_tasks(db)
         db.commit()
     except Exception:
         db.rollback()
-        logger.exception("Recurring task generation failed")
+        logger.exception("Scheduled task processing failed")
     finally:
         db.close()
 

@@ -1,5 +1,6 @@
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 
@@ -16,6 +17,7 @@ from app.routers.bills_imports import delete_bills_import_history, finance_impor
 from app.routers.notifications import list_bills_todos, mark_all_notifications_read, send_bills_message
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
+from app.services.auto_pause import pause_missed_end_of_day_tasks
 
 
 class FakeSession:
@@ -412,6 +414,51 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
 
         self.assertEqual(different_bill[0]["status"], "ready")
         self.assertEqual(exact_repeat[0]["status"], "duplicate")
+
+    def test_server_catches_missed_end_of_day_without_counting_the_night(self):
+        amman = ZoneInfo("Asia/Amman")
+        started_at = datetime(2026, 10, 10, 16, 0, tzinfo=amman).astimezone(timezone.utc)
+        task = Task(
+            title="Still running overnight",
+            department_id=self.finance.id,
+            assigned_to_user_id=self.finance_employee.id,
+            created_by_user_id=self.finance_manager.id,
+            status=TaskStatus.in_progress,
+            expected_minutes=30,
+            due_date=date(2026, 10, 10),
+            started_at=started_at,
+            timer_started_at=started_at,
+            work_seconds=120,
+        )
+        today_task = Task(
+            title="Started this morning",
+            department_id=self.finance.id,
+            assigned_to_user_id=self.aseel.id,
+            created_by_user_id=self.finance_manager.id,
+            status=TaskStatus.in_progress,
+            expected_minutes=30,
+            due_date=date(2026, 10, 11),
+            started_at=datetime(2026, 10, 11, 8, 0, tzinfo=amman).astimezone(timezone.utc),
+            timer_started_at=datetime(2026, 10, 11, 8, 0, tzinfo=amman).astimezone(timezone.utc),
+            work_seconds=0,
+        )
+        self.db.add_all([task, today_task])
+        self.db.commit()
+
+        paused = pause_missed_end_of_day_tasks(
+            self.db,
+            datetime(2026, 10, 11, 9, 0, tzinfo=amman),
+        )
+        self.db.commit()
+
+        self.assertEqual([item.id for item in paused], [task.id])
+        self.assertEqual(task.status, TaskStatus.blocked)
+        self.assertEqual(task.hold_reason_text, "END OF DAY")
+        self.assertIsNone(task.timer_started_at)
+        self.assertEqual(task.work_seconds, 120 + 60 * 60)
+        self.assertEqual(today_task.status, TaskStatus.in_progress)
+        notification = self.db.query(Notification).filter(Notification.user_id == self.finance_employee.id).one()
+        self.assertEqual(notification.notification_type, "auto_paused")
 
 
 class SplitTaskReportTests(unittest.TestCase):
