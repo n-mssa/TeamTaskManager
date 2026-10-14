@@ -998,6 +998,7 @@ const themeOptions = [
   { id: 'light', label: 'عاجي وأسمنتي', color: 'linear-gradient(135deg, #F6F3EC 50%, #303230 50%)' },
   { id: 'dark', label: 'أسمنتي داكن', color: 'linear-gradient(135deg, #232624 50%, #656A63 50%)' },
   { id: 'blue', label: 'Deep Sea × Warm Linen', color: 'linear-gradient(135deg, #F4EDE1 50%, #123E46 50%)' },
+  { id: 'sage', label: 'Teal & Sage', color: 'linear-gradient(135deg, #DAE8DD 50%, #CDE4E0 50%)' },
 ]
 
 function buildNav(user) {

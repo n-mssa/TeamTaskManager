@@ -3986,7 +3986,7 @@ body, button, input, select, textarea { font-family: 'Alexandria', system-ui, sa
 .topbar-actions .icon-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .sidebar nav svg, .topbar-actions svg { stroke-width: 1.7; }
 @media (prefers-reduced-motion: reduce) { .topbar-actions .icon-button, .theme-picker > .icon-button { transition: none; } }
-/* Three coordinated palettes; legacy green/orange preferences use ivory. */
+/* Coordinated palettes; legacy green/orange preferences use ivory. */
 :root, :root[data-theme='light'], :root[data-theme='green'], :root[data-theme='orange'] {
   color-scheme: light;
   --canvas: #F6F3EC; --surface: #FFFDFA; --surface-soft: #F0EDE6;
@@ -4019,6 +4019,18 @@ body, button, input, select, textarea { font-family: 'Alexandria', system-ui, sa
   --navy-950: #0B3037; --navy-900: #123E46; --navy-800: #123E46; --navy-700: #23555C;
   --sidebar-bg: #123E46; --sidebar-text: #F4EDE1; --sidebar-muted: #BDCEC8;
   --sidebar-active: #F4EDE1; --sidebar-active-text: #123E46;
+}
+:root[data-theme='sage'] {
+  color-scheme: light;
+  --canvas: #F0F4F1; --surface: #FAFCFA; --surface-soft: #E7EFEC;
+  --text: #293D38; --muted: #566B63; --border: #C5D5CD;
+  --accent: #426F68; --accent-hover: #355D57; --accent-rgb: 66,111,104;
+  --focus: #426F68; --on-accent: #FAFCFA;
+  --navy-950: #293D38; --navy-900: #355D57; --navy-800: #426F68; --navy-700: #53796C;
+  --sidebar-bg: #DAE8DD; --sidebar-text: #293D38; --sidebar-muted: #4E665B;
+  --sidebar-active: #CDE4E0; --sidebar-active-text: #294F48;
+  --shadow-card: 0 2px 6px rgb(41 61 56 / 4%);
+  --shadow-hover: 0 8px 22px rgb(41 61 56 / 8%);
 }
 :root[data-theme] body, :root[data-theme] .app-shell, :root[data-theme] .login-page { background: var(--canvas); color: var(--text); }
 :root[data-theme] .sidebar { background: var(--sidebar-bg); box-shadow: none; border-inline-end: 1px solid var(--border); }
