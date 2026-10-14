@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MessageCircle } from 'lucide-react'
 import { LayoutDashboard, SquarePlus, ChartNoAxesCombined, FileChartColumn, Gauge, ContactRound, Network, TimerOff, PanelRightOpen, Layers3, AlertTriangle, BarChart3, BellDot, BellRing, Building2, Check, Clock, ClipboardList, LogOut, SunMoon, Plus, Send, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { rememberTheme, savedUserTheme } from './utils/themes'
@@ -14,6 +15,7 @@ import DelayReasons from './pages/DelayReasons'
 import TaskForm from './pages/TaskForm'
 import TaskDetails from './pages/TaskDetails'
 import BillsImport from './pages/BillsImport'
+import ChatPanel from './components/ChatPanel'
 import { formatDuration, isOverExpected, remainingExpectedSeconds } from './utils/tasks'
 
 export default function App() {
@@ -32,6 +34,9 @@ export default function App() {
   const [expectedTimeReview, setExpectedTimeReview] = useState(null)
   const [billsMessageConfig, setBillsMessageConfig] = useState(null)
   const [billsMessageOpen, setBillsMessageOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatContactId, setChatContactId] = useState(null)
+  const [chatUnreadCount, setChatUnreadCount] = useState(0)
   const historyReady = useRef(false)
   const handlingHistoryPop = useRef(false)
   const pendingScrollRestore = useRef(null)
@@ -147,9 +152,26 @@ export default function App() {
     }
 
     loadNotifications()
-    const interval = window.setInterval(loadNotifications, user.role === 'bills_user' ? 15_000 : 45_000)
+    const interval = window.setInterval(loadNotifications, ['super_admin', 'admin', 'employee', 'bills_user'].includes(user.role) ? 15_000 : 45_000)
     return () => window.clearInterval(interval)
   }, [user, browserNotificationPermission])
+
+  useEffect(() => {
+    if (!user || !['super_admin', 'admin', 'employee'].includes(user.role)) {
+      setChatUnreadCount(0)
+      return
+    }
+    const loadChatCount = () => api('/messages/contacts')
+      .then((items) => setChatUnreadCount(items.reduce((total, item) => total + item.unread_count, 0)))
+      .catch(() => {})
+    loadChatCount()
+    const interval = window.setInterval(loadChatCount, 15_000)
+    window.addEventListener('team-chat-refresh', loadChatCount)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('team-chat-refresh', loadChatCount)
+    }
+  }, [user])
 
   useEffect(() => {
     if (!user || user.role === 'bills_user') {
@@ -220,6 +242,9 @@ export default function App() {
     setNotificationsOpen(false)
     setBillsMessageConfig(null)
     setBillsMessageOpen(false)
+    setChatOpen(false)
+    setChatContactId(null)
+    setChatUnreadCount(0)
     setToast(null)
     setAutoPausePrompt(null)
     setExpectedTimeReview(null)
@@ -264,6 +289,14 @@ export default function App() {
 
   async function openNotification(notification) {
     if (notification.notification_type === 'finance_message') {
+      setNotificationsOpen(false)
+      setToast(null)
+      return
+    }
+    if (notification.notification_type === 'direct_message' && notification.related_user_id) {
+      await markNotificationRead(notification)
+      setChatContactId(notification.related_user_id)
+      setChatOpen(true)
       setNotificationsOpen(false)
       setToast(null)
       return
@@ -470,6 +503,12 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-title"><button id="nav-toggle" className="icon-button" aria-label="فتح القائمة الجانبية" aria-expanded={sidebarOpen} aria-controls="main-sidebar" onClick={() => setSidebarOpen(value => !value)}><PanelRightOpen size={21} strokeWidth={1.6} /></button><div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
           <div className="topbar-actions">
+            {['super_admin', 'admin', 'employee'].includes(user.role) && (
+              <button className="icon-button chat-trigger" onClick={() => { setChatContactId(null); setChatOpen(true) }} title="المحادثات" aria-label="المحادثات" type="button">
+                <MessageCircle size={18} />
+                {chatUnreadCount > 0 && <span className="notification-count">{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}
+              </button>
+            )}
             {billsMessageConfig?.can_send && (
               <button className="icon-button bills-message-trigger" onClick={() => setBillsMessageOpen(true)} title="إرسال تنبيه لمستخدم الفواتير" aria-label="إرسال تنبيه لمستخدم الفواتير" type="button">
                 <BellRing size={18} />
@@ -518,6 +557,18 @@ export default function App() {
         <BillsMessageModal
           recipientCount={billsMessageConfig?.recipient_count || 0}
           onClose={() => setBillsMessageOpen(false)}
+        />
+      )}
+      {chatOpen && (
+        <ChatPanel
+          currentUser={user}
+          initialContactId={chatContactId}
+          onClose={() => { setChatOpen(false); setChatContactId(null) }}
+          onUnreadChange={setChatUnreadCount}
+          onConversationRead={(contactId) => {
+            setNotifications((current) => current.filter((item) => !(item.notification_type === 'direct_message' && item.related_user_id === contactId)))
+            window.dispatchEvent(new CustomEvent('team-chat-refresh'))
+          }}
         />
       )}
       {autoPausePrompt && (

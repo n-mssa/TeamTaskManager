@@ -252,14 +252,30 @@ class Notification(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
+    related_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     title = Column(String(220), nullable=False)
     message = Column(Text, nullable=False)
     notification_type = Column(String(80), nullable=False, default="task_assigned")
     read_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    related_user = relationship("User", foreign_keys=[related_user_id])
     task = relationship("Task")
+
+
+class DirectMessage(Base):
+    __tablename__ = "direct_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    recipient_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    sender = relationship("User", foreign_keys=[sender_id])
+    recipient = relationship("User", foreign_keys=[recipient_id])
 
 
 class TaskStatusHistory(Base):

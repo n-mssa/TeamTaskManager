@@ -274,11 +274,38 @@ class NotificationOut(BaseModel):
     id: int
     user_id: int
     task_id: Optional[int]
+    related_user_id: Optional[int] = None
     title: str
     message: str
     notification_type: str
     read_at: Optional[datetime]
     created_at: datetime
+
+
+class DirectMessageCreate(BaseModel):
+    recipient_id: int
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class DirectMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    sender_id: int
+    recipient_id: int
+    body: str
+    read_at: Optional[datetime]
+    created_at: datetime
+
+
+class ChatContactOut(BaseModel):
+    id: int
+    full_name_ar: str
+    role: UserRole
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
+    unread_count: int = 0
 
 
 class BillsMessageConfig(BaseModel):

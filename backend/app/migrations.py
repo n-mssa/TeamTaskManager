@@ -49,6 +49,10 @@ DEPARTMENT_COLUMNS = {
     "billing_assignee_id": "INTEGER REFERENCES users(id)",
 }
 
+NOTIFICATION_COLUMNS = {
+    "related_user_id": "INTEGER REFERENCES users(id)",
+}
+
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_tasks_assignee_active_due ON tasks (assigned_to_user_id, due_date) WHERE deleted_at IS NULL",
     "CREATE INDEX IF NOT EXISTS ix_tasks_department_active_due ON tasks (department_id, due_date) WHERE deleted_at IS NULL",
@@ -58,6 +62,9 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS ix_task_history_task_changed ON task_status_history (task_id, changed_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_task_attachments_task_created ON task_attachments (task_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS ix_notifications_user_read_created ON notifications (user_id, read_at, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_notifications_user_type_related ON notifications (user_id, notification_type, related_user_id)",
+    "CREATE INDEX IF NOT EXISTS ix_direct_messages_pair_created ON direct_messages (sender_id, recipient_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS ix_direct_messages_recipient_read ON direct_messages (recipient_id, read_at, created_at DESC)",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_task_recurring_occurrence ON tasks (recurring_template_id, recurrence_date) WHERE recurring_template_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_billing_import_key ON tasks (billing_import_key) WHERE billing_import_key IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS ix_tasks_split_group ON tasks (split_group_id) WHERE split_group_id IS NOT NULL",
@@ -96,6 +103,8 @@ def apply_migrations():
             add_column_if_missing(connection, "users", column, definition)
         for column, definition in DEPARTMENT_COLUMNS.items():
             add_column_if_missing(connection, "departments", column, definition)
+        for column, definition in NOTIFICATION_COLUMNS.items():
+            add_column_if_missing(connection, "notifications", column, definition)
         connection.execute(
             text(
                 "UPDATE departments SET recurring_tasks_enabled = TRUE "
@@ -171,9 +180,22 @@ def apply_migrations():
                 "id SERIAL PRIMARY KEY, "
                 "user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
                 "task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE, "
+                "related_user_id INTEGER REFERENCES users(id), "
                 "title VARCHAR(220) NOT NULL, "
                 "message TEXT NOT NULL, "
                 "notification_type VARCHAR(80) NOT NULL DEFAULT 'task_assigned', "
+                "read_at TIMESTAMP WITH TIME ZONE, "
+                "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS direct_messages ("
+                "id SERIAL PRIMARY KEY, "
+                "sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                "recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                "body TEXT NOT NULL, "
                 "read_at TIMESTAMP WITH TIME ZONE, "
                 "created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP"
                 ")"

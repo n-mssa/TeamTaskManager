@@ -8,13 +8,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Department, Notification, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
+from app.models import Department, DirectMessage, Notification, RecurringTaskTemplate, Task, TaskAttachment, TaskStatus, User, UserRole
 from app.permissions import can_access_task
 from app.routers.tasks import apply_status_effects, attachment_for_task_or_split_group, hydrate_shared_sanads, split_task, validate_status_reasons, validate_status_transition
-from app.schemas import BillsImportHistoryUpdate, BillsImportRequest, BillsMessageCreate, TaskDelete, TaskSplitCreate
+from app.schemas import BillsImportHistoryUpdate, BillsImportRequest, BillsMessageCreate, DirectMessageCreate, TaskDelete, TaskSplitCreate
 from app.routers.users import sync_department_manager
 from app.routers.bills_imports import delete_bills_import_history, finance_import_assignee, group_rows_by_customer, history_row, inspect_import, parse_rows, row_key, sanad_notification_recipient_ids, title_date, update_bills_import_history
 from app.routers.notifications import list_bills_todos, mark_all_notifications_read, send_bills_message
+from app.routers.messages import get_conversation, list_chat_contacts, mark_conversation_read, send_direct_message
 from app.services.reports import delay_hours_for_task, is_effectively_over_expected, kpi_summary, scoped_tasks
 from app.services.recurring_tasks import generated_title, is_template_due
 from app.services.auto_pause import pause_missed_end_of_day_tasks
@@ -171,6 +172,94 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
     def test_bills_user_cannot_access_tasks(self):
         self.assertFalse(can_access_task(self.bills_user, self.finance_task))
         self.assertFalse(can_access_task(self.bills_user, self.general_task))
+
+    def test_normal_admin_chat_hides_restricted_department_employees(self):
+        contacts = list_chat_contacts(self.db, self.admin)
+
+        self.assertIn(self.general_employee.id, [item.id for item in contacts])
+        self.assertNotIn(self.finance_employee.id, [item.id for item in contacts])
+
+    def test_normal_admin_cannot_send_to_restricted_employee(self):
+        with self.assertRaises(HTTPException) as error:
+            send_direct_message(DirectMessageCreate(recipient_id=self.finance_employee.id, body="Private"), self.db, self.admin)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_employee_cannot_message_another_employee(self):
+        with self.assertRaises(HTTPException) as error:
+            send_direct_message(DirectMessageCreate(recipient_id=self.finance_employee.id, body="Private"), self.db, self.general_employee)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_manager_and_bills_user_cannot_access_chat(self):
+        for user in [self.finance_manager, self.bills_user]:
+            with self.assertRaises(HTTPException) as error:
+                list_chat_contacts(self.db, user)
+            self.assertEqual(error.exception.status_code, 403)
+
+    def test_chat_rejects_blank_messages_and_preserves_line_breaks(self):
+        with self.assertRaises(HTTPException) as error:
+            send_direct_message(DirectMessageCreate(recipient_id=self.general_employee.id, body=" \n "), self.db, self.admin)
+        self.assertEqual(error.exception.status_code, 400)
+        sent = send_direct_message(DirectMessageCreate(recipient_id=self.general_employee.id, body="First\nSecond"), self.db, self.admin)
+        self.assertEqual(sent.body, "First\nSecond")
+
+    def test_conversation_does_not_include_another_admin_messages(self):
+        own = send_direct_message(DirectMessageCreate(recipient_id=self.general_employee.id, body="Own"), self.db, self.admin)
+        send_direct_message(DirectMessageCreate(recipient_id=self.general_employee.id, body="Other"), self.db, self.super_admin)
+        messages = get_conversation(self.general_employee.id, limit=100, db=self.db, current_user=self.admin)
+        self.assertEqual([message.id for message in messages], [own.id])
+
+    def test_chat_rejects_inactive_recipients(self):
+        self.general_employee.is_active = False
+        self.db.commit()
+        with self.assertRaises(HTTPException) as error:
+            send_direct_message(DirectMessageCreate(recipient_id=self.general_employee.id, body="Hello"), self.db, self.admin)
+        self.assertEqual(error.exception.status_code, 400)
+
+    def test_super_admin_can_message_restricted_department_employee(self):
+        message = send_direct_message(
+            DirectMessageCreate(recipient_id=self.finance_employee.id, body="Please review today's work."),
+            self.db,
+            self.super_admin,
+        )
+
+        self.assertEqual(message.sender_id, self.super_admin.id)
+        notification = self.db.query(Notification).filter(Notification.user_id == self.finance_employee.id).one()
+        self.assertEqual(notification.notification_type, "direct_message")
+        self.assertEqual(notification.related_user_id, self.super_admin.id)
+
+    def test_employee_can_reply_only_after_admin_starts_conversation(self):
+        with self.assertRaises(HTTPException):
+            send_direct_message(
+                DirectMessageCreate(recipient_id=self.admin.id, body="Can I start this chat?"),
+                self.db,
+                self.general_employee,
+            )
+
+        send_direct_message(
+            DirectMessageCreate(recipient_id=self.general_employee.id, body="Please send an update."),
+            self.db,
+            self.admin,
+        )
+        reply = send_direct_message(
+            DirectMessageCreate(recipient_id=self.admin.id, body="The update is ready."),
+            self.db,
+            self.general_employee,
+        )
+
+        self.assertEqual(reply.recipient_id, self.admin.id)
+
+    def test_reading_chat_marks_messages_and_notifications_read(self):
+        send_direct_message(
+            DirectMessageCreate(recipient_id=self.general_employee.id, body="Please check this."),
+            self.db,
+            self.admin,
+        )
+
+        marked = mark_conversation_read(self.admin.id, self.db, self.general_employee)
+
+        self.assertEqual(len(marked), 1)
+        self.assertIsNotNone(self.db.query(DirectMessage).one().read_at)
+        self.assertIsNotNone(self.db.query(Notification).one().read_at)
 
     def test_finance_team_can_message_active_bills_users(self):
         result = send_bills_message(
