@@ -4022,13 +4022,13 @@ body, button, input, select, textarea { font-family: 'Alexandria', system-ui, sa
 }
 :root[data-theme='sage'] {
   color-scheme: light;
-  --canvas: #F0F4F1; --surface: #FAFCFA; --surface-soft: #E7EFEC;
-  --text: #293D38; --muted: #566B63; --border: #C5D5CD;
-  --accent: #426F68; --accent-hover: #355D57; --accent-rgb: 66,111,104;
-  --focus: #426F68; --on-accent: #FAFCFA;
+  --canvas: #D8EAD8; --surface: #EAF5E7; --surface-soft: #C8DFC6;
+  --text: #293D38; --muted: #4E6256; --border: #A7C5B1;
+  --accent: #35665E; --accent-hover: #294F48; --accent-rgb: 53,102,94;
+  --focus: #35665E; --on-accent: #FAFCFA;
   --navy-950: #293D38; --navy-900: #355D57; --navy-800: #426F68; --navy-700: #53796C;
-  --sidebar-bg: #DAE8DD; --sidebar-text: #293D38; --sidebar-muted: #4E665B;
-  --sidebar-active: #CDE4E0; --sidebar-active-text: #294F48;
+  --sidebar-bg: #B5DEDA; --sidebar-text: #244941; --sidebar-muted: #3F6058;
+  --sidebar-active: #8FC5BC; --sidebar-active-text: #203F38;
   --shadow-card: 0 2px 6px rgb(41 61 56 / 4%);
   --shadow-hover: 0 8px 22px rgb(41 61 56 / 8%);
 }
@@ -4050,6 +4050,14 @@ body, button, input, select, textarea { font-family: 'Alexandria', system-ui, sa
 :root[data-theme] .theme-menu { width: 260px; }
 :root[data-theme] .theme-menu button span { border: 1px solid var(--border); }
 :root[data-theme] .kanban-column { background: var(--surface-soft); }
+:root[data-theme='sage'] .topbar { background: #D0E8E1; }
+:root[data-theme='sage'] .sidebar nav button:hover:not(.active) { background: var(--sidebar-active); }
+:root[data-theme='sage'] .kanban-board .ux-task-actions button {
+  background: #D3E8D2;
+  color: var(--text);
+  border-color: var(--border);
+}
+:root[data-theme='sage'] .kanban-board .ux-task-actions button:hover { background: #BEDBBE; }
 :root[data-theme] .theme-swatches { width: auto; padding: 10px; border-radius: 18px; }
 .theme-swatches > div { display: flex; gap: 8px; }
 :root[data-theme] .theme-swatches button { position: relative; width: 46px; height: 46px; min-height: 46px; padding: 5px; border-radius: 50%; justify-content: center; border: 2px solid transparent; background: transparent; }
