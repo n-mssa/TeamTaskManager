@@ -293,10 +293,12 @@ small,
   min-height: 0;
   display: grid;
   grid-template-columns: 290px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .chat-contacts {
   min-width: 0;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   padding: 14px;
@@ -336,6 +338,7 @@ small,
 .chat-contact-list {
   min-height: 0;
   display: grid;
+  grid-auto-rows: minmax(58px, auto);
   align-content: start;
   gap: 6px;
   overflow-y: auto;
@@ -345,6 +348,7 @@ small,
 .chat-contact {
   width: 100%;
   min-width: 0;
+  min-height: 58px;
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
