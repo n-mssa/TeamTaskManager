@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LayoutDashboard, SquarePlus, ChartNoAxesCombined, FileChartColumn, Gauge, ContactRound, Network, TimerOff, PanelRightOpen, Layers3, AlertTriangle, BarChart3, BellDot, BellRing, Building2, Check, Clock, ClipboardList, LogOut, SunMoon, Plus, Send, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
+import { rememberTheme, savedUserTheme } from './utils/themes'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
 import MyTasks from './pages/MyTasks'
@@ -44,7 +45,7 @@ export default function App() {
     api('/auth/me')
       .then((me) => {
         setUser(me)
-        setTheme(me.theme_id || localStorage.getItem('team_tasks_theme') || 'light')
+        setTheme(savedUserTheme(me))
         setRoute(defaultRoute(me.role))
       })
       .catch(() => setRoute('login'))
@@ -237,6 +238,7 @@ export default function App() {
   }
 
   function saveTheme(nextTheme, activeUser = user) {
+    rememberTheme(nextTheme, activeUser)
     setTheme(nextTheme)
     if (!activeUser) return
     api('/users/me/theme', {
@@ -390,7 +392,7 @@ export default function App() {
     return (
       <>
         <ThemePicker theme={theme} onThemeChange={(nextTheme) => saveTheme(nextTheme)} className="login-theme-toggle" />
-        <Login onLogin={(me) => { setUser(me); setTheme(me.theme_id || theme); setRoute(defaultRoute(me.role)) }} />
+        <Login onLogin={(me) => { setUser(me); setTheme(savedUserTheme(me)); setRoute(defaultRoute(me.role)) }} />
       </>
     )
   }

@@ -69,7 +69,7 @@ class PasswordReset(BaseModel):
 
 
 class ThemePreference(BaseModel):
-    theme_id: str = Field(pattern="^(light|dark|blue|green|orange)$")
+    theme_id: str = Field(pattern="^(light|dark|blue|green|orange|sage)$")
 
 
 class UserOut(UserBase):
