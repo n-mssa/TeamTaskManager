@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, BarChart3, Bell, BellRing, Building2, Check, Clock, ClipboardList, LogOut, Palette, Plus, Send, Users as UsersIcon, X } from 'lucide-react'
+import { LayoutDashboard, SquarePlus, ChartNoAxesCombined, FileChartColumn, Gauge, ContactRound, Network, TimerOff, PanelRightOpen, Layers3, AlertTriangle, BarChart3, BellDot, BellRing, Building2, Check, Clock, ClipboardList, LogOut, SunMoon, Plus, Send, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
@@ -17,6 +17,7 @@ import { formatDuration, isOverExpected, remainingExpectedSeconds } from './util
 
 export default function App() {
   const [user, setUser] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [route, setRoute] = useState('loading')
   const [selectedTask, setSelectedTask] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('team_tasks_theme') || 'light')
@@ -398,7 +399,7 @@ export default function App() {
     return (
       <div className="bills-workspace">
         <header className="bills-workspace-header">
-          <div><span className="brand-mark"><ClipboardList size={18} /></span><div><strong>إدخال مهام المالية</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
+          <div><span className="brand-mark"><Layers3 size={21} strokeWidth={1.6} /></span><div><strong>إدخال مهام المالية</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
           <div className="topbar-actions">
             <NotificationBell
               notifications={notifications}
@@ -432,10 +433,13 @@ export default function App() {
   const nav = buildNav(user)
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app-shell auto-nav-shell" onKeyDown={event => {if (event.key === 'Escape') {setSidebarOpen(false); document.getElementById('nav-toggle')?.focus()}}}>
+      {sidebarOpen && <button className="nav-dismiss" aria-label="إغلاق القائمة" onClick={() => setSidebarOpen(false)} />}
+      <div className={`nav-reveal ${sidebarOpen ? 'is-open' : ''}`} onMouseLeave={() => setSidebarOpen(false)}>
+      <button className="nav-edge" aria-label="فتح القائمة الجانبية" onClick={() => setSidebarOpen(true)}><span /></button>
+      <aside className="sidebar" id="main-sidebar" aria-label="التنقل الرئيسي">
         <div className="brand">
-          <span className="brand-mark"><ClipboardList size={18} /></span>
+          <span className="brand-mark"><Layers3 size={21} strokeWidth={1.6} /></span>
           <div><strong>لوحة المهام</strong><span>إدارة مهام الفريق</span></div>
         </div>
         <nav>
@@ -446,9 +450,10 @@ export default function App() {
               onClick={() => {
                 if (item.route === 'task-form') setSelectedTask(null)
                 setRoute(item.route)
+                setSidebarOpen(false)
               }}
             >
-              <item.icon size={18} />{item.label}
+              <span className="nav-icon"><item.icon size={21} strokeWidth={1.6} aria-hidden="true" /></span>{item.label}
             </button>
           ))}
         </nav>
@@ -458,9 +463,10 @@ export default function App() {
           <button className="icon-button" onClick={logout} title="تسجيل الخروج"><LogOut size={17} /></button>
         </div>
       </aside>
+      </div>
       <main className="main">
         <header className="topbar">
-          <div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div>
+          <div className="topbar-title"><button id="nav-toggle" className="icon-button" aria-label="فتح القائمة الجانبية" aria-expanded={sidebarOpen} aria-controls="main-sidebar" onClick={() => setSidebarOpen(value => !value)}><PanelRightOpen size={21} strokeWidth={1.6} /></button><div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
           <div className="topbar-actions">
             {billsMessageConfig?.can_send && (
               <button className="icon-button bills-message-trigger" onClick={() => setBillsMessageOpen(true)} title="إرسال تنبيه لمستخدم الفواتير" aria-label="إرسال تنبيه لمستخدم الفواتير" type="button">
@@ -483,7 +489,7 @@ export default function App() {
         </header>
         <div className="page-content">
           {route === 'my-tasks' && <MyTasks user={user} openTask={openTask} />}
-          {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
+          {(route === 'dashboard' || route === 'admin-dashboard') && <Dashboard user={user} openTask={openTask} editTask={(id) => {setSelectedTask(id);setRoute('task-form')}} createTask={() => { setSelectedTask(null); setRoute('task-form') }} />}
           {route === 'task-form' && <TaskForm taskId={selectedTask} user={user} onSaved={() => { window.dispatchEvent(new CustomEvent('team-tasks-refresh')); setRoute(defaultRoute(user.role)) }} />}
           {route === 'task-details' && <TaskDetails taskId={selectedTask} user={user} editTask={(id) => { setSelectedTask(id); setRoute('task-form') }} onDeleted={() => setRoute(defaultRoute(user.role))} />}
           {route === 'reports' && <Reports user={user} openTask={openTask} />}
@@ -672,7 +678,7 @@ function NotificationBell({
   return (
     <div className="notification-center">
       <button className="icon-button notification-trigger" onClick={onToggle} title="الإشعارات" aria-label="الإشعارات" type="button">
-        <Bell size={18} />
+        <BellDot size={21} strokeWidth={1.7} aria-hidden="true" />
         {notifications.length > 0 && <span className="notification-count">{notifications.length}</span>}
       </button>
       {open && (
@@ -959,11 +965,10 @@ function ThemePicker({ theme, onThemeChange, className = '' }) {
         aria-label="اختيار الثيم"
         type="button"
       >
-        <Palette size={18} />
+        <SunMoon size={21} strokeWidth={1.7} aria-hidden="true" />
       </button>
       {open && (
-        <div className="theme-menu" role="menu">
-          <strong>الثيم</strong>
+        <div className="theme-menu theme-swatches" role="group" aria-label="اختيار ألوان الواجهة">
           <div>
             {themeOptions.map((option) => (
               <button
@@ -975,9 +980,11 @@ function ThemePicker({ theme, onThemeChange, className = '' }) {
                 }}
                 type="button"
                 title={option.label}
+                aria-label={option.label}
+                aria-pressed={activeTheme.id === option.id}
               >
-                <span style={{ background: option.color }} />
-                {option.label}
+                <span className="theme-swatch" style={{ background: option.color }} />
+                {activeTheme.id === option.id && <Check size={13} className="swatch-check" aria-hidden="true" />}
               </button>
             ))}
           </div>
@@ -988,11 +995,9 @@ function ThemePicker({ theme, onThemeChange, className = '' }) {
 }
 
 const themeOptions = [
-  { id: 'light', label: 'فاتح', color: '#2563eb' },
-  { id: 'dark', label: 'ليلي', color: '#0f172a' },
-  { id: 'blue', label: 'أزرق', color: '#0ea5e9' },
-  { id: 'green', label: 'أخضر', color: '#16a34a' },
-  { id: 'orange', label: 'برتقالي', color: '#f97316' },
+  { id: 'light', label: 'عاجي وأسمنتي', color: 'linear-gradient(135deg, #F6F3EC 50%, #303230 50%)' },
+  { id: 'dark', label: 'أسمنتي داكن', color: 'linear-gradient(135deg, #232624 50%, #656A63 50%)' },
+  { id: 'blue', label: 'Deep Sea × Warm Linen', color: 'linear-gradient(135deg, #F4EDE1 50%, #123E46 50%)' },
 ]
 
 function buildNav(user) {
@@ -1000,28 +1005,28 @@ function buildNav(user) {
   const isSuperAdmin = role === 'super_admin'
   if (role === 'employee') {
     return [
-      { route: 'my-tasks', label: 'مهامي', icon: ClipboardList },
-      { route: 'task-form', label: 'إضافة مهمة', icon: Plus },
-      { route: 'reports', label: 'تقريري', icon: BarChart3 },
+      { route: 'my-tasks', label: 'مهامي', icon: LayoutDashboard },
+      { route: 'task-form', label: 'إضافة مهمة', icon: SquarePlus },
+      { route: 'reports', label: 'تقريري', icon: ChartNoAxesCombined },
     ]
   }
   if (role === 'manager') {
     return [
-      { route: 'dashboard', label: 'لوحة القسم', icon: ClipboardList },
-      { route: 'task-form', label: 'إنشاء مهمة', icon: Plus },
-      { route: 'reports', label: 'التقارير', icon: BarChart3 },
-      { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
+      { route: 'dashboard', label: 'لوحة القسم', icon: LayoutDashboard },
+      { route: 'task-form', label: 'إنشاء مهمة', icon: SquarePlus },
+      { route: 'reports', label: 'التقارير', icon: ChartNoAxesCombined },
+      { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: Gauge },
     ]
   }
   const adminNav = [
-    { route: 'admin-dashboard', label: 'لوحة الإدارة', icon: ClipboardList },
-    { route: 'task-form', label: 'إنشاء مهمة', icon: Plus },
-    { route: 'reports', label: 'التقارير', icon: BarChart3 },
-    ...(isSuperAdmin ? [{ route: 'executive-report', label: 'تقرير الإدارة التنفيذي', icon: BarChart3 }] : []),
-    { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: BarChart3 },
-    { route: 'users', label: 'المستخدمون', icon: UsersIcon },
-    { route: 'departments', label: 'الأقسام', icon: Building2 },
-    { route: 'delay-reasons', label: 'أسباب التأخير', icon: BarChart3 },
+    { route: 'admin-dashboard', label: 'لوحة الإدارة', icon: LayoutDashboard },
+    { route: 'task-form', label: 'إنشاء مهمة', icon: SquarePlus },
+    { route: 'reports', label: 'التقارير', icon: ChartNoAxesCombined },
+    ...(isSuperAdmin ? [{ route: 'executive-report', label: 'تقرير الإدارة التنفيذي', icon: FileChartColumn }] : []),
+    { route: 'kpi', label: 'مؤشرات الأداء (KPI)', icon: Gauge },
+    { route: 'users', label: 'المستخدمون', icon: ContactRound },
+    { route: 'departments', label: 'الأقسام', icon: Network },
+    { route: 'delay-reasons', label: 'أسباب التأخير', icon: TimerOff },
   ]
   return adminNav
 }

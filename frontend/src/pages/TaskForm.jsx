@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import DurationClock from '../components/DurationClock'
 import { api } from '../api/client'
 import { priorityOptions } from '../utils/labels'
 
-const maxAttachments = 3
-const maxAttachmentBytes = 10 * 1024 * 1024
 const financeTitleTemplates = {
   invoice: 'اصدار فاتورة',
   receipt: 'سند قبض',
@@ -25,8 +24,8 @@ const emptyTask = {
   assigned_to_user_id: '',
   priority: 'normal',
   status: 'pending',
-  expected_hours: '01',
-  expected_minutes_part: '00',
+  expected_hours: '',
+  expected_minutes_part: '',
   manager_notes: '',
   hold_reason_text: '',
   overrun_reason_text: '',
@@ -37,11 +36,13 @@ const emptyTask = {
 }
 
 export default function TaskForm({ taskId, onSaved, user }) {
+  const [customTime, setCustomTime] = useState(Boolean(taskId))
+  const [success, setSuccess] = useState('')
+  const titleRef = useRef(null)
   const [form, setForm] = useState(emptyTask)
   const [users, setUsers] = useState([])
   const [departments, setDepartments] = useState([])
   const [delayReasons, setDelayReasons] = useState([])
-  const [attachments, setAttachments] = useState([])
   const [recurringTemplates, setRecurringTemplates] = useState([])
   const [billsImportConfig, setBillsImportConfig] = useState(null)
   const [savingBillsAssignee, setSavingBillsAssignee] = useState(false)
@@ -81,11 +82,11 @@ export default function TaskForm({ taskId, onSaved, user }) {
         expected_hours: formatTimePart(Math.floor(task.expected_minutes / 60)),
         expected_minutes_part: formatTimePart(task.expected_minutes % 60),
       })
-      if (!task && user?.role === 'employee') {
+      if (!task && user?.department_id) {
         setForm((current) => ({
           ...current,
           department_id: user.department_id ? String(user.department_id) : '',
-          assigned_to_user_id: String(user.id),
+          assigned_to_user_id: user.role === 'employee' ? String(user.id) : '',
         }))
       }
     })
@@ -164,31 +165,6 @@ export default function TaskForm({ taskId, onSaved, user }) {
     }))
   }
 
-  function chooseAttachments(event) {
-    const files = Array.from(event.target.files || [])
-    if (files.length > maxAttachments) {
-      setError('يمكنك رفع 3 ملفات كحد أقصى.')
-      event.target.value = ''
-      setAttachments([])
-      return
-    }
-    const oversized = files.find((file) => file.size > maxAttachmentBytes)
-    if (oversized) {
-      setError('يجب أن يكون حجم كل ملف 10 ميجابايت أو أقل.')
-      event.target.value = ''
-      setAttachments([])
-      return
-    }
-    setError('')
-    setAttachments(files)
-  }
-
-  function appendPayload(formData, payload) {
-    Object.entries(payload).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) formData.append(key, value)
-    })
-  }
-
   async function submit(event) {
     event.preventDefault()
     if (saving) return
@@ -196,9 +172,18 @@ export default function TaskForm({ taskId, onSaved, user }) {
     setError('')
     const expectedMinutes = Number(form.expected_hours || 0) * 60 + Number(form.expected_minutes_part || 0)
     if (expectedMinutes <= 0) {
-      setError('الوقت المتوقع يجب أن يكون أكبر من صفر.')
+      setError('اختر مدة للمهمة، أو أدخل وقتًا آخر أكبر من صفر.')
       setSaving(false)
       return
+    }
+    const addAnother = event.nativeEvent.submitter?.value === 'another'
+    const finish = () => {
+      if (!addAnother || taskId) { onSaved(); return }
+      setSuccess('تم إنشاء المهمة. جاهز لإضافة مهمة أخرى.')
+      setForm({...emptyTask, recurrence_start_date: localDateValue(), department_id: form.department_id, assigned_to_user_id: user?.role === 'employee' ? String(user.id) : ''})
+      setCustomTime(false)
+      window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+      titleRef.current?.focus()
     }
     const financePrefix = financeTitleTemplates[form.finance_title_template]
     const taskTitle = financePrefix
@@ -233,25 +218,14 @@ export default function TaskForm({ taskId, onSaved, user }) {
             start_date: form.recurrence_start_date,
           }),
         })
-        onSaved()
-        return
-      }
-      if (!taskId && attachments.length) {
-        const formData = new FormData()
-        appendPayload(formData, payload)
-        attachments.forEach((file) => formData.append('attachments', file))
-        await api('/tasks/with-attachments', {
-          method: 'POST',
-          body: formData,
-        })
-        onSaved()
+        finish()
         return
       }
       await api(taskId ? `/tasks/${taskId}` : '/tasks', {
         method: taskId ? 'PUT' : 'POST',
         body: JSON.stringify(payload),
       })
-      onSaved()
+      finish()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -291,10 +265,12 @@ export default function TaskForm({ taskId, onSaved, user }) {
   return (
     <section>
       <div className="page-head"><h1>{taskId ? 'تعديل مهمة' : 'إنشاء مهمة'}</h1></div>
-      <form className="form-grid" onSubmit={submit}>
-        <label>القسم<select required value={form.department_id} onChange={(e) => chooseDepartment(e.target.value)} disabled={user?.role === 'employee'}>
+      <form className="form-grid simple-task-form" onSubmit={submit}>
+        {success && <p className="ux-notice span-2" role="status">{success}</p>}
+        {!taskId && form.department_id && <p className="task-department-note span-2">القسم: <strong>{selectedDepartment?.name_ar}</strong> · الأولوية الافتراضية: عادية</p>}
+        {(taskId || !user?.department_id && departments.length !== 1) && <label>القسم<select required value={form.department_id} onChange={(e) => chooseDepartment(e.target.value)} disabled={user?.role === 'employee'}>
           <option value="">اختر القسم</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
-        </select></label>
+        </select></label>}
         {!taskId && isFinanceDepartment && <label>نوع المهمة المالية<select value={form.finance_title_template} onChange={(e) => chooseFinanceTemplate(e.target.value)}>
           <option value="">مهمة عادية</option>
           <option value="invoice">اصدار فاتورة</option>
@@ -315,33 +291,21 @@ export default function TaskForm({ taskId, onSaved, user }) {
             </div>
             <small>سيُحفظ العنوان: {financeTitleTemplates[form.finance_title_template]} - {form.finance_title_detail || 'اسم المهمة'}</small>
           </label>
-        ) : <label>عنوان المهمة<input required value={form.title} onChange={(e) => setValue('title', e.target.value)} /></label>}
-        <label>المكلف<select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id || user?.role === 'employee'}>
+        ) : <label className="span-2">عنوان المهمة<input ref={titleRef} placeholder="مثال: تصميم بوست لعرض نهاية الأسبوع" maxLength={220} required value={form.title} onChange={(e) => setValue('title', e.target.value)} /></label>}
+        <label className="span-2">الموظف المسؤول
+          <select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id || user?.role === 'employee'}>
           <option value="">{form.department_id ? 'اختر الموظف' : 'اختر القسم أولاً'}</option>{filteredUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
         </select></label>
-        <label>الأولوية<select value={form.priority} onChange={(e) => setValue('priority', e.target.value)}>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label className="expected-time-field">الوقت المتوقع
-          <div className="expected-time-control" dir="ltr">
-            <input
-              aria-label="ساعات"
-              inputMode="numeric"
-              maxLength="2"
-              value={form.expected_hours}
-              onChange={(e) => setTimePart('expected_hours', e.target.value, 99)}
-              onBlur={() => blurTimePart('expected_hours', 99)}
-            />
-            <span>:</span>
-            <input
-              aria-label="دقائق"
-              inputMode="numeric"
-              maxLength="2"
-              value={form.expected_minutes_part}
-              onChange={(e) => setTimePart('expected_minutes_part', e.target.value, 59)}
-              onBlur={() => blurTimePart('expected_minutes_part', 59)}
-            />
-          </div>
-          <small>دقائق : ساعات</small>
-        </label>
+        <fieldset className="duration-picker span-2">
+          <legend>كم تحتاج المهمة من الوقت؟</legend>
+          <div className="duration-options">{[[15,'15 دقيقة'],[30,'30 دقيقة'],[60,'1 ساعة'],[120,'2 ساعة']].map(([minutes,label]) => <button type="button" key={minutes} aria-pressed={!customTime && Number(form.expected_hours || 0)*60+Number(form.expected_minutes_part || 0)===minutes} onClick={() => {setCustomTime(false);setForm(current => ({...current,expected_hours:String(Math.floor(minutes/60)),expected_minutes_part:String(minutes%60)}))}}>{label}</button>)}<button type="button" aria-pressed={customTime} onClick={() => setCustomTime(true)}>وقت آخر</button></div>
+          {customTime && <DurationClock hours={form.expected_hours} minutes={form.expected_minutes_part} onChange={(hours, minutes) => setForm(current => ({...current, expected_hours: String(hours), expected_minutes_part: String(minutes)}))} />}
+          <p aria-live="polite">{Number(form.expected_hours || 0)*60+Number(form.expected_minutes_part || 0)>0 ? `الوقت المتوقع: ${Number(form.expected_hours || 0) ? `${Number(form.expected_hours)} ساعة ` : ''}${Number(form.expected_minutes_part || 0) ? `${Number(form.expected_minutes_part)} دقيقة` : ''}` : 'اختر المدة المناسبة — لا توجد مدة محددة مسبقًا'}</p>
+        </fieldset>
+        <details className="task-extras span-2" open={taskId ? true : undefined}>
+          <summary>تفاصيل إضافية <span>الوصف، الأولوية والخيارات الأخرى</span></summary>
+          <div className="form-grid">
+          <label>الأولوية<select value={form.priority} onChange={(e) => setValue('priority', e.target.value)}>{priorityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {canManageBillsAssignee && billsImportConfig && (
           <div className="finance-import-assignee span-2">
             <div><strong>مستلم مهام إدخال الفواتير</strong><small>كل المهام التي ترفعها مريم ستُسند تلقائياً إلى هذا الموظف.</small></div>
@@ -380,18 +344,10 @@ export default function TaskForm({ taskId, onSaved, user }) {
         </>}
         {form.status === 'blocked' && <label className="span-2">سبب الانتظار<textarea required value={form.hold_reason_text || ''} onChange={(e) => setValue('hold_reason_text', e.target.value)} /></label>}
         {taskId && <label className="span-2">سبب تجاوز الوقت المتوقع<textarea value={form.overrun_reason_text || ''} onChange={(e) => setValue('overrun_reason_text', e.target.value)} /></label>}
-        {user?.role !== 'employee' && <label className="span-2">ملاحظات المدير<textarea value={form.manager_notes || ''} onChange={(e) => setValue('manager_notes', e.target.value)} /></label>}
         {user?.role === 'employee' && !taskId && <p className="note span-2">ستظهر هذه المهمة عندك مباشرة، لكنها لن تُحتسب في مؤشرات الأداء حتى يعتمدها المدير.</p>}
-        {!taskId && form.recurrence_frequency === 'none' && (
-          <label className="span-2 file-upload">
-            المرفقات
-            <input type="file" multiple onChange={chooseAttachments} />
-            <small>حتى 3 ملفات، 10 ميجابايت لكل ملف.</small>
-            {attachments.length > 0 && <span>{attachments.map((file) => file.name).join(', ')}</span>}
-          </label>
-        )}
-        {error && <p className="error span-2">{error}</p>}
-        <button className="primary span-2" disabled={saving}>{saving ? 'جار الحفظ...' : 'حفظ'}</button>
+        </div></details>
+        {error && <p role="alert" className="error span-2">{error}</p>}
+        <div className="task-create-actions span-2"><button type="submit" value="save" className="primary" disabled={saving}>{saving ? 'جارٍ الحفظ…' : taskId ? 'حفظ التعديلات' : 'إنشاء المهمة'}</button>{!taskId && <button type="submit" value="another" disabled={saving}>إنشاء وإضافة أخرى</button>}</div>
       </form>
       {canCreateRecurring && recurringTemplates.length > 0 && (
         <article className="panel recurring-template-list">

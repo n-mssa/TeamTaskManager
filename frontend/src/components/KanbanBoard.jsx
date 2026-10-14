@@ -1,16 +1,45 @@
-import { useEffect, useRef, useState } from 'react'
-import { Clock, CalendarDays, FileCheck2, GripVertical } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Clock, CalendarDays, FileCheck2, GripVertical, AlertTriangle, Flag, CheckCircle2, MessageCircle, PauseCircle, Circle, PlayCircle } from 'lucide-react'
 import { api } from '../api/client'
-import { boardColumns, priorityLabels } from '../utils/labels'
+import { boardColumns, priorityLabels, statusLabels } from '../utils/labels'
 import { elapsedSeconds, formatDuration, isEndOfDayOverdue, isOverExpected, timerExpectedMinutes } from '../utils/tasks'
 import EmptyState from './EmptyState'
 
-export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) {
+export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun, savingId = null }) {
   const [, setTick] = useState(0)
   const [delayReasons, setDelayReasons] = useState([])
   const [overrunRequest, setOverrunRequest] = useState(null)
   const [finishRequest, setFinishRequest] = useState(null)
   const [holdRequest, setHoldRequest] = useState(null)
+  const boardRef = useRef(null)
+  const positions = useRef(new Map())
+  const [draggedId, setDraggedId] = useState(null)
+  const [dropColumn, setDropColumn] = useState(null)
+
+  useLayoutEffect(() => {
+    const next = new Map()
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    boardRef.current?.querySelectorAll('[data-task-id]').forEach((card) => {
+      const rect = card.getBoundingClientRect()
+      const previous = positions.current.get(card.dataset.taskId)
+      next.set(card.dataset.taskId, rect)
+      if (!reducedMotion && previous && card.animate) {
+        const x = previous.left - rect.left
+        const y = previous.top - rect.top
+        if (x || y) card.animate([
+          { transform: `translate(${x}px, ${y}px)`, opacity: 0.75 },
+          { transform: 'translate(0, 0)', opacity: 1 },
+        ], { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' })
+      }
+    })
+    positions.current = next
+  }, [tasks])
+
+  function clearDrag() {
+    setDraggedId(null)
+    setDropColumn(null)
+  }
+
   const promptedOverruns = useRef(new Set())
 
   useEffect(() => {
@@ -56,15 +85,21 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
   )
 
   function handleDragStart(event, task) {
+    setDraggedId(task.id)
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(task.id))
   }
 
   function handleDrop(event, status) {
     event.preventDefault()
+    clearDrag()
     const taskId = Number(event.dataTransfer.getData('text/plain'))
     const task = tasks.find((item) => item.id === taskId)
-    if (!task || task.status === status) return
+    requestMove(task, status)
+  }
+
+  function requestMove(task, status) {
+    if (savingId || !task || task.status === status) return
     if (!canMoveToStatus(task, status)) return
     if (needsOverrunReason(task, status, user)) {
       setOverrunRequest({ task, nextStatus: status })
@@ -115,23 +150,32 @@ export default function KanbanBoard({ tasks, user, onOpen, onMove, onOverrun }) 
 
   return (
     <>
-      <div className="kanban-board">
+      <div className="kanban-board" ref={boardRef} onDragEnd={clearDrag}>
         {boardColumns.map((column) => {
           const columnTasks = tasks.filter((task) => task.status === column.value && !isOldCompletedTask(task))
           return (
             <section
-              className="kanban-column"
+              className={`kanban-column status-${column.value} ${dropColumn === column.value ? 'is-drop-target' : ''}`}
               key={column.value}
-              onDragOver={(event) => event.preventDefault()}
+              onDragOver={(event) => {
+                const dragged = tasks.find((item) => item.id === draggedId)
+                if (!dragged || dragged.status === column.value || !canMoveToStatus(dragged, column.value)) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                setDropColumn(column.value)
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setDropColumn(null)
+              }}
               onDrop={(event) => handleDrop(event, column.value)}
             >
               <header className="column-head">
-                <span>{column.label}</span>
+                <span className="column-title"><StatusIcon status={column.value} />{column.label}</span>
                 <small>{columnTasks.length}</small>
               </header>
               <div className="column-list">
                 {columnTasks.length
-                  ? columnTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={onOpen} onDragStart={handleDragStart} />)
+                  ? columnTasks.map((task) => <TaskCard key={task.id} task={task} dragging={draggedId === task.id} busy={savingId !== null} onAction={requestMove} onOpen={onOpen} onDragStart={handleDragStart} />)
                   : <EmptyState compact title="لا توجد مهام" description="اسحب مهمة إلى هذه القائمة." />}
               </div>
             </section>
@@ -347,11 +391,11 @@ function CompletionComplaintModal({ task, onCancel, onFinish }) {
         {!showComplaint ? (
           <div className="completion-choice-grid">
             <button type="button" className="completion-choice is-good" onClick={() => onFinish('')} aria-label="الوقت مناسب">
-              <img src="/assets/time-ok.png" alt="" />
+              <CheckCircle2 size={32} aria-hidden="true" />
               <strong>الوقت مناسب</strong>
             </button>
             <button type="button" className="completion-choice is-bad" onClick={() => setShowComplaint(true)} aria-label="الوقت غير مناسب">
-              <img src="/assets/time-complaint.png" alt="" />
+              <MessageCircle size={32} aria-hidden="true" />
               <strong>الوقت غير مناسب</strong>
             </button>
           </div>
@@ -372,7 +416,7 @@ function CompletionComplaintModal({ task, onCancel, onFinish }) {
   )
 }
 
-function TaskCard({ task, onOpen, onDragStart }) {
+function TaskCard({ task, dragging, busy, onAction, onOpen, onDragStart }) {
   const worked = elapsedSeconds(task)
   const overExpected = isOverExpected(task)
   const missedEndOfDay = isEndOfDayOverdue(task)
@@ -383,18 +427,15 @@ function TaskCard({ task, onOpen, onDragStart }) {
   const pausedTooLong = isPausedTooLong(task)
   return (
     <article
-      className={`task-card ${visuallyOverdue ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''} ${task.has_sanad ? 'has-sanad' : ''} ${task.split_group_id ? 'is-split-task' : ''}`}
-      draggable
+      data-task-id={task.id}
+      className={`task-card status-${task.status} ${dragging ? 'is-dragging' : ''} ${visuallyOverdue ? 'is-overdue' : ''} ${pendingSelfApproval ? 'is-pending-approval' : ''} ${pausedTooLong ? 'is-paused-too-long' : ''} ${task.has_sanad ? 'has-sanad' : ''} ${task.split_group_id ? 'is-split-task' : ''}`}
+      draggable={!busy}
       onDragStart={(event) => onDragStart(event, task)}
       onClick={() => onOpen(task.id)}
     >
       {pausedTooLong && (
         <span className="paused-too-long-badge" title="المهمة متوقفة منذ أكثر من 3 أيام">
-          <img
-            className="paused-too-long-icon"
-            src="/assets/warning-icon.webp"
-            alt="تنبيه: المهمة متوقفة منذ أكثر من 3 أيام"
-          />
+          <AlertTriangle size={18} aria-label="المهمة متوقفة منذ أكثر من 3 أيام" />
         </span>
       )}
       <div className="task-card-top">
@@ -408,14 +449,14 @@ function TaskCard({ task, onOpen, onDragStart }) {
       {task.split_group_id && <span className="split-task-badge">مهمة مقسمة · الجزء 1.{task.split_part}</span>}
       {task.has_sanad && <span className="sanad-badge"><FileCheck2 size={13} />تم إرفاق السند</span>}
       {missedEndOfDay && <span className="eod-overdue-badge">لم تُنجز قبل نهاية اليوم</span>}
-      <h3>{task.title}</h3>
-      {task.description && <p>{task.description}</p>}
+      <h3><button className="ux-task-title" onClick={event => {event.stopPropagation();onOpen(task.id)}}>{task.title}</button></h3>
+
       <div className="task-meta">
         <span><Clock size={14} />{task.split_group_id ? `${formatMinutes(sharedExpectedMinutes)} إجمالي` : formatMinutes(task.expected_minutes)}</span>
         <span><CalendarDays size={14} />إسناد {task.due_date}</span>
       </div>
       <div className={`live-timer ${overExpected ? 'is-over' : ''}`}>
-        الوقت الفعلي: {formatDuration(worked)} {overExpected ? '• تجاوز المتوقع' : ''}
+        الوقت الفعلي: {formatDuration(worked)} {overExpected ? `• تجاوز بـ ${formatDuration(worked - sharedExpectedMinutes * 60)}` : ''}
       </div>
       <div className="task-progress" aria-label={`نسبة الوقت المستخدم ${progress}%`}>
         <span style={{ width: `${progress}%` }} />
@@ -424,6 +465,11 @@ function TaskCard({ task, onOpen, onDragStart }) {
         <span>{task.assignee?.full_name_ar || 'غير محدد'}</span>
         <small>{task.department?.name_ar || ''}</small>
       </div>
+      {!['done', 'cancelled'].includes(task.status) && <div className="ux-task-actions" onClick={event => event.stopPropagation()}>
+        {task.status !== 'in_progress' && <button disabled={busy} onClick={() => onAction(task, 'in_progress')}><PlayCircle size={15} />{task.status === 'blocked' ? 'استئناف' : 'ابدأ'}</button>}
+        {task.status === 'in_progress' && <button disabled={busy} onClick={() => onAction(task, 'blocked')}><PauseCircle size={15} />أوقف</button>}
+        <button disabled={busy} onClick={() => onAction(task, 'done')}><CheckCircle2 size={15} />أنجز</button>
+      </div>}
       {task.delay_reason && <small className="delay-note">{task.delay_reason.name_ar}</small>}
       {task.hold_reason_text && task.status === 'blocked' && <small className="delay-note">سبب الانتظار: {task.hold_reason_text}</small>}
       {pausedTooLong && <small className="pause-warning">هذه المهمة متوقفة منذ أكثر من 3 أيام، يرجى مراجعتها.</small>}
@@ -433,11 +479,10 @@ function TaskCard({ task, onOpen, onDragStart }) {
 
 function ProductionFlag({ flagged }) {
   return (
-    <img
+    <Flag
+      size={17}
       className={`production-flag ${flagged ? 'is-flagged' : ''}`}
-      src={flagged ? '/assets/flag-red.png' : '/assets/flag-grey.png'}
-      alt={flagged ? 'مشكلة إنتاج مسجلة' : 'لا توجد مشكلة إنتاج'}
-      title={flagged ? 'مشكلة إنتاج مسجلة' : 'لا توجد مشكلة إنتاج'}
+      aria-label={flagged ? 'مشكلة إنتاج مسجلة' : 'لا توجد مشكلة إنتاج'}
     />
   )
 }
@@ -459,4 +504,9 @@ function formatMinutes(minutes) {
   if (hours && rest) return `${hours}س ${rest}د`
   if (hours) return `${hours}س`
   return `${rest}د`
+}
+
+function StatusIcon({ status }) {
+  const Icon = { pending: Circle, in_progress: PlayCircle, blocked: PauseCircle, done: CheckCircle2 }[status] || Circle
+  return <Icon size={17} aria-hidden="true" />
 }
