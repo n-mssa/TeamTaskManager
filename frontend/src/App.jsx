@@ -157,7 +157,7 @@ export default function App() {
   }, [user, browserNotificationPermission])
 
   useEffect(() => {
-    if (!user || !['super_admin', 'admin', 'employee'].includes(user.role)) {
+    if (!user || !['super_admin', 'admin', 'manager', 'employee'].includes(user.role)) {
       setChatUnreadCount(0)
       return
     }
@@ -503,7 +503,7 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-title"><button id="nav-toggle" className="icon-button" aria-label="فتح القائمة الجانبية" aria-expanded={sidebarOpen} aria-controls="main-sidebar" onClick={() => setSidebarOpen(value => !value)}><PanelRightOpen size={21} strokeWidth={1.6} /></button><div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
           <div className="topbar-actions">
-            {['super_admin', 'admin', 'employee'].includes(user.role) && (
+            {['super_admin', 'admin', 'manager', 'employee'].includes(user.role) && (
               <button className="icon-button chat-trigger" onClick={() => { setChatContactId(null); setChatOpen(true) }} title="المحادثات" aria-label="المحادثات" type="button">
                 <MessageCircle size={18} />
                 {chatUnreadCount > 0 && <span className="notification-count">{chatUnreadCount > 99 ? '99+' : chatUnreadCount}</span>}

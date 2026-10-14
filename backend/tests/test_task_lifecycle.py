@@ -184,16 +184,68 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
             send_direct_message(DirectMessageCreate(recipient_id=self.finance_employee.id, body="Private"), self.db, self.admin)
         self.assertEqual(error.exception.status_code, 403)
 
-    def test_employee_cannot_message_another_employee(self):
+    def test_employee_cannot_message_employee_in_another_department(self):
         with self.assertRaises(HTTPException) as error:
             send_direct_message(DirectMessageCreate(recipient_id=self.finance_employee.id, body="Private"), self.db, self.general_employee)
         self.assertEqual(error.exception.status_code, 403)
 
-    def test_manager_and_bills_user_cannot_access_chat(self):
-        for user in [self.finance_manager, self.bills_user]:
+    def test_manager_can_chat_with_own_team_but_bills_user_cannot(self):
+        contacts = {item.id for item in list_chat_contacts(self.db, self.finance_manager)}
+        self.assertIn(self.finance_employee.id, contacts)
+        self.assertNotIn(self.general_employee.id, contacts)
+        with self.assertRaises(HTTPException) as error:
+            list_chat_contacts(self.db, self.bills_user)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_team_members_can_start_chat_and_send_emoji(self):
+        sent = send_direct_message(DirectMessageCreate(recipient_id=self.aseel.id, body="مرحبا 👍 😊"), self.db, self.finance_employee)
+        self.assertEqual(sent.body, "مرحبا 👍 😊")
+        contacts = list_chat_contacts(self.db, self.aseel)
+        sender = next(contact for contact in contacts if contact.id == self.finance_employee.id)
+        self.assertEqual(sender.unread_count, 1)
+        marked = mark_conversation_read(self.finance_employee.id, self.db, self.aseel)
+        self.assertEqual([item.id for item in marked], [sent.id])
+
+    def test_team_contacts_include_colleagues_and_manager_before_first_message(self):
+        contacts = {item.id for item in list_chat_contacts(self.db, self.finance_employee)}
+        self.assertIn(self.aseel.id, contacts)
+        self.assertIn(self.finance_manager.id, contacts)
+        self.assertNotIn(self.finance_employee.id, contacts)
+        self.assertNotIn(self.general_employee.id, contacts)
+        self.assertNotIn(self.admin.id, contacts)
+        self.assertNotIn(self.bills_user.id, contacts)
+
+    def test_employee_can_start_chat_with_own_manager(self):
+        sent = send_direct_message(DirectMessageCreate(recipient_id=self.finance_manager.id, body="Team update"), self.db, self.finance_employee)
+        reply = send_direct_message(DirectMessageCreate(recipient_id=self.finance_employee.id, body="Thank you"), self.db, self.finance_manager)
+        self.assertEqual(reply.recipient_id, sent.sender_id)
+
+    def test_employee_can_start_chat_with_admin_in_own_department(self):
+        sent = send_direct_message(DirectMessageCreate(recipient_id=self.admin.id, body="Team update"), self.db, self.general_employee)
+        self.assertEqual(sent.recipient_id, self.admin.id)
+
+    def test_cross_department_team_messages_cannot_be_read_or_marked(self):
+        for endpoint in [
+            lambda: get_conversation(self.finance_employee.id, limit=100, db=self.db, current_user=self.general_employee),
+            lambda: mark_conversation_read(self.finance_employee.id, self.db, self.general_employee),
+        ]:
             with self.assertRaises(HTTPException) as error:
-                list_chat_contacts(self.db, user)
+                endpoint()
             self.assertEqual(error.exception.status_code, 403)
+
+    def test_unassigned_users_are_not_treated_as_one_team(self):
+        self.finance_employee.department_id = None
+        self.aseel.department_id = None
+        self.db.commit()
+        self.assertEqual(list_chat_contacts(self.db, self.finance_employee), [])
+        with self.assertRaises(HTTPException) as error:
+            send_direct_message(DirectMessageCreate(recipient_id=self.aseel.id, body="Hello"), self.db, self.finance_employee)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_chat_rejects_self_messages(self):
+        with self.assertRaises(HTTPException) as error:
+            send_direct_message(DirectMessageCreate(recipient_id=self.general_employee.id, body="Hello"), self.db, self.general_employee)
+        self.assertEqual(error.exception.status_code, 400)
 
     def test_chat_rejects_blank_messages_and_preserves_line_breaks(self):
         with self.assertRaises(HTTPException) as error:
@@ -227,7 +279,9 @@ class RestrictedDepartmentPermissionTests(unittest.TestCase):
         self.assertEqual(notification.notification_type, "direct_message")
         self.assertEqual(notification.related_user_id, self.super_admin.id)
 
-    def test_employee_can_reply_only_after_admin_starts_conversation(self):
+    def test_employee_can_reply_to_other_department_admin_after_admin_starts_conversation(self):
+        self.admin.department_id = self.finance.id
+        self.db.commit()
         with self.assertRaises(HTTPException):
             send_direct_message(
                 DirectMessageCreate(recipient_id=self.admin.id, body="Can I start this chat?"),

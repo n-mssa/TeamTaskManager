@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircle, Search, Send, X } from 'lucide-react'
+import { MessageCircle, Search, Send, Smile, X } from 'lucide-react'
 import { api } from '../api/client'
 
 export default function ChatPanel({ currentUser, initialContactId, onClose, onUnreadChange, onConversationRead }) {
@@ -8,11 +8,14 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
   const [messages, setMessages] = useState([])
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
+  const [emojiOpen, setEmojiOpen] = useState(false)
   const [loadingContacts, setLoadingContacts] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const messageEndRef = useRef(null)
+  const composerRef = useRef(null)
+  const emojiPickerRef = useRef(null)
   const activeContactRef = useRef(activeContactId)
   const conversationRequestRef = useRef(0)
   activeContactRef.current = activeContactId
@@ -78,6 +81,7 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
   useEffect(() => {
     setMessages([])
     setDraft('')
+    setEmojiOpen(false)
     setError('')
     loadConversation(activeContactId)
     if (!activeContactId) return
@@ -91,6 +95,39 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages.at(-1)?.id])
+
+  useEffect(() => {
+    if (!emojiOpen) return
+    const dismiss = (event) => {
+      if (!emojiPickerRef.current?.contains(event.target)) setEmojiOpen(false)
+    }
+    const escape = (event) => {
+      if (event.key === 'Escape') {
+        setEmojiOpen(false)
+        emojiPickerRef.current?.querySelector('button')?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [emojiOpen])
+
+  function insertEmoji(emoji) {
+    const field = composerRef.current
+    const start = field?.selectionStart ?? draft.length
+    const end = field?.selectionEnd ?? start
+    const nextDraft = draft.slice(0, start) + emoji + draft.slice(end)
+    if (nextDraft.length > 2000) return
+    setDraft(nextDraft)
+    setEmojiOpen(false)
+    window.requestAnimationFrame(() => {
+      field?.focus()
+      field?.setSelectionRange(start + emoji.length, start + emoji.length)
+    })
+  }
 
   async function sendMessage(event) {
     event?.preventDefault()
@@ -135,7 +172,7 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
 
         <div className="chat-layout">
           <aside className="chat-contacts" aria-label="جهات الاتصال">
-            <label className="chat-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث عن موظف" aria-label="ابحث عن موظف" /></label>
+            <label className="chat-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث عن زميل" aria-label="ابحث عن زميل" /></label>
             <div className="chat-contact-list">
               {loadingContacts ? <p className="chat-state">جارٍ تحميل المحادثات...</p> : visibleContacts.map((contact) => (
                 <button className={`chat-contact${contact.id === activeContactId ? ' active' : ''}`} type="button" key={contact.id} onClick={() => setActiveContactId(contact.id)}>
@@ -145,7 +182,7 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
                 </button>
               ))}
               {!loadingContacts && !visibleContacts.length && (
-                <div className="chat-empty-contacts"><MessageCircle size={22} /><span>{currentUser.role === 'employee' ? 'لا توجد محادثات بعد. سيظهر هنا أي حوار يبدأه مسؤول.' : 'لا يوجد موظفون مطابقون.'}</span></div>
+                <div className="chat-empty-contacts"><MessageCircle size={22} /><span>لا توجد جهات اتصال مطابقة.</span></div>
               )}
             </div>
           </aside>
@@ -159,16 +196,22 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
                     const mine = message.sender_id === currentUser.id
                     return <article className={`chat-bubble${mine ? ' mine' : ''}`} key={message.id}><p>{message.body}</p><time dateTime={message.created_at}>{formatMessageTime(message.created_at)}</time></article>
                   })}
-                  {!loadingMessages && !messages.length && <div className="chat-conversation-empty"><MessageCircle size={26} /><strong>ابدأ المحادثة</strong><span>اكتب رسالة قصيرة وواضحة للموظف.</span></div>}
+                  {!loadingMessages && !messages.length && <div className="chat-conversation-empty"><MessageCircle size={26} /><strong>ابدأ المحادثة</strong></div>}
                   <span ref={messageEndRef} />
                 </div>
                 <form className="chat-composer" onSubmit={sendMessage}>
-                  <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} maxLength={2000} rows={2} placeholder="اكتب رسالتك..." aria-label="نص الرسالة" />
+                  <div className="chat-emoji-control" ref={emojiPickerRef}>
+                    <button className="icon-button chat-emoji-toggle" type="button" title="الرموز التعبيرية" aria-label="الرموز التعبيرية" aria-expanded={emojiOpen} aria-controls="chat-emoji-picker" onClick={() => setEmojiOpen((open) => !open)}><Smile size={20} /></button>
+                    {emojiOpen && <div className="chat-emoji-picker" id="chat-emoji-picker" role="group" aria-label="اختيار رمز تعبيري">
+                      {chatEmojis.map(([emoji, label]) => <button key={emoji} type="button" title={label} aria-label={label} onClick={() => insertEmoji(emoji)}>{emoji}</button>)}
+                    </div>}
+                  </div>
+                  <textarea ref={composerRef} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} maxLength={2000} rows={2} placeholder="اكتب رسالتك..." aria-label="نص الرسالة" />
                   <button className="primary chat-send" type="submit" disabled={!draft.trim() || sending} title="إرسال"><Send size={18} /><span>{sending ? 'جارٍ...' : 'إرسال'}</span></button>
                 </form>
               </>
             ) : (
-              <div className="chat-no-selection"><MessageCircle size={34} /><strong>اختر محادثة</strong><span>اختر موظفاً من القائمة لعرض الرسائل.</span></div>
+              <div className="chat-no-selection"><MessageCircle size={34} /><strong>اختر محادثة</strong></div>
             )}
           </div>
         </div>
@@ -183,8 +226,17 @@ function initials(name = '') {
 }
 
 function roleLabel(role) {
-  return role === 'super_admin' ? 'مدير النظام الأعلى' : role === 'admin' ? 'مدير النظام' : 'موظف'
+  return role === 'super_admin' ? 'مدير النظام الأعلى' : role === 'admin' ? 'مدير النظام' : role === 'manager' ? 'قائد الفريق' : 'موظف'
 }
+
+const chatEmojis = [
+  ['😀', 'ابتسامة'], ['😊', 'سعادة'], ['😂', 'ضحك'], ['🙂', 'ابتسامة هادئة'],
+  ['😉', 'غمزة'], ['😍', 'إعجاب'], ['🤔', 'تفكير'], ['😅', 'ابتسامة مع عرق'],
+  ['👍', 'موافقة'], ['👎', 'عدم موافقة'], ['👏', 'تصفيق'], ['🙌', 'احتفال'],
+  ['🙏', 'شكر'], ['💪', 'قوة'], ['👌', 'تمام'], ['👋', 'تحية'],
+  ['❤️', 'قلب'], ['💚', 'قلب أخضر'], ['🎉', 'تهنئة'], ['✨', 'تألق'],
+  ['✅', 'تم'], ['📌', 'تثبيت'], ['☕', 'قهوة'], ['💯', 'ممتاز'],
+]
 
 function formatMessageTime(value) {
   return new Intl.DateTimeFormat('ar-JO', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))

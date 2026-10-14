@@ -12,12 +12,13 @@ from ..schemas import ChatContactOut, DirectMessageCreate, DirectMessageOut
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 ADMIN_ROLES = {UserRole.super_admin, UserRole.admin}
-CHAT_ROLES = ADMIN_ROLES | {UserRole.employee}
+TEAM_ROLES = {UserRole.manager, UserRole.employee}
+CHAT_ROLES = ADMIN_ROLES | TEAM_ROLES
 
 
 def require_chat_user(user: User):
     if user.role not in CHAT_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chat is available to administrators and employees")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chat is available to administrators, managers and employees")
 
 
 def employee_department_is_restricted(db: Session, employee: User) -> bool:
@@ -28,7 +29,7 @@ def employee_department_is_restricted(db: Session, employee: User) -> bool:
 
 
 def admin_can_message_employee(db: Session, admin: User, employee: User) -> bool:
-    if admin.role not in ADMIN_ROLES or employee.role != UserRole.employee or not employee.is_active:
+    if admin.role not in ADMIN_ROLES or employee.role not in TEAM_ROLES or not employee.is_active:
         return False
     return admin.role == UserRole.super_admin or not employee_department_is_restricted(db, employee)
 
@@ -44,23 +45,30 @@ def conversation_exists(db: Session, first_id: int, second_id: int) -> bool:
     return db.query(DirectMessage.id).filter(pair_filter(first_id, second_id)).first() is not None
 
 
-def assert_chat_pair(db: Session, current_user: User, other_user: User, allow_employee_initiation: bool = False):
+def assert_chat_pair(db: Session, current_user: User, other_user: User):
     require_chat_user(current_user)
+    if current_user.id == other_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose another team member")
     if not other_user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user is inactive")
+    same_team = bool(current_user.department_id and current_user.department_id == other_user.department_id)
     if current_user.role in ADMIN_ROLES:
+        if other_user.role in ADMIN_ROLES and same_team:
+            return
         if not admin_can_message_employee(db, current_user, other_user):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This employee is outside your chat permissions")
         return
+    if other_user.role in TEAM_ROLES and same_team:
+        return
     if other_user.role not in ADMIN_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employees can reply only to administrators")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can message only your own department or an existing administrator contact")
     if other_user.role == UserRole.admin and employee_department_is_restricted(db, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Restricted department conversations require the super admin")
-    if not allow_employee_initiation and not conversation_exists(db, current_user.id, other_user.id):
+    if not same_team and not conversation_exists(db, current_user.id, other_user.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="An administrator must start the conversation")
 
 
-def visible_admin_contacts(db: Session, employee: User) -> list[User]:
+def visible_team_contacts(db: Session, employee: User) -> list[User]:
     participant_rows = (
         db.query(DirectMessage.sender_id, DirectMessage.recipient_id)
         .filter(or_(DirectMessage.sender_id == employee.id, DirectMessage.recipient_id == employee.id))
@@ -70,11 +78,16 @@ def visible_admin_contacts(db: Session, employee: User) -> list[User]:
         sender_id if recipient_id == employee.id else recipient_id
         for sender_id, recipient_id in participant_rows
     }
-    if not participant_ids:
-        return []
-    query = db.query(User).filter(User.id.in_(participant_ids), User.role.in_(ADMIN_ROLES), User.is_active.is_(True))
+    team_filter = User.id == -1
+    if employee.department_id:
+        team_filter = and_(User.department_id == employee.department_id, User.role.in_(CHAT_ROLES))
+    query = db.query(User).filter(
+        User.id != employee.id,
+        User.is_active.is_(True),
+        or_(team_filter, and_(User.id.in_(participant_ids), User.role.in_(ADMIN_ROLES))),
+    )
     if employee_department_is_restricted(db, employee):
-        query = query.filter(User.role == UserRole.super_admin)
+        query = query.filter(User.role != UserRole.admin)
     return query.all()
 
 
@@ -82,12 +95,15 @@ def visible_admin_contacts(db: Session, employee: User) -> list[User]:
 def list_chat_contacts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_chat_user(current_user)
     if current_user.role in ADMIN_ROLES:
-        query = db.query(User).filter(User.role == UserRole.employee, User.is_active.is_(True))
+        allowed_roles = User.role.in_(TEAM_ROLES)
+        if current_user.department_id:
+            allowed_roles = or_(allowed_roles, and_(User.role.in_(ADMIN_ROLES), User.department_id == current_user.department_id))
+        query = db.query(User).filter(allowed_roles, User.id != current_user.id, User.is_active.is_(True))
         if current_user.role == UserRole.admin:
             query = query.filter(~User.department.has(Department.is_restricted.is_(True)))
         contacts = query.order_by(User.full_name_ar.asc()).all()
     else:
-        contacts = visible_admin_contacts(db, current_user)
+        contacts = visible_team_contacts(db, current_user)
 
     contact_ids = [contact.id for contact in contacts]
     departments = {
