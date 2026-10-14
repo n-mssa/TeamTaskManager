@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import DurationClock from '../components/DurationClock'
 import { api } from '../api/client'
+import { playSound } from '../utils/sounds'
 import { priorityOptions } from '../utils/labels'
 
 const financeTitleTemplates = {
@@ -178,6 +179,7 @@ export default function TaskForm({ taskId, onSaved, user }) {
     }
     const addAnother = event.nativeEvent.submitter?.value === 'another'
     const finish = () => {
+      if (!taskId) playSound('success')
       if (!addAnother || taskId) { onSaved(); return }
       setSuccess('تم إنشاء المهمة. جاهز لإضافة مهمة أخرى.')
       setForm({...emptyTask, recurrence_start_date: localDateValue(), department_id: form.department_id, assigned_to_user_id: user?.role === 'employee' ? String(user.id) : ''})

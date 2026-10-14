@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Volume2, VolumeX } from 'lucide-react'
 import { LayoutDashboard, SquarePlus, ChartNoAxesCombined, FileChartColumn, Gauge, ContactRound, Network, TimerOff, PanelRightOpen, Layers3, AlertTriangle, BarChart3, BellDot, BellRing, Building2, Check, Clock, ClipboardList, LogOut, SunMoon, Plus, Send, Users as UsersIcon, X } from 'lucide-react'
 import { api, setToken } from './api/client'
 import { rememberTheme, savedUserTheme } from './utils/themes'
+import { enableAudio, playMessageSound, playSound, setSoundsEnabled, soundsEnabled } from './utils/sounds'
 import { priorityLabels, roleLabels, statusLabels } from './utils/labels'
 import Login from './pages/Login'
 import MyTasks from './pages/MyTasks'
@@ -37,9 +38,27 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false)
   const [chatContactId, setChatContactId] = useState(null)
   const [chatUnreadCount, setChatUnreadCount] = useState(0)
+  const [soundOn, setSoundOn] = useState(soundsEnabled)
   const historyReady = useRef(false)
   const handlingHistoryPop = useRef(false)
   const pendingScrollRestore = useRef(null)
+
+  useEffect(() => {
+    window.addEventListener('pointerdown', enableAudio)
+    window.addEventListener('keydown', enableAudio)
+    return () => {
+      window.removeEventListener('pointerdown', enableAudio)
+      window.removeEventListener('keydown', enableAudio)
+    }
+  }, [])
+
+  function toggleSounds() {
+    const enabled = !soundOn
+    setSoundOn(enabled)
+    setSoundsEnabled(enabled)
+    enableAudio()
+    if (enabled) playSound('notification')
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -126,18 +145,29 @@ export default function App() {
     if (!user) return
     const seenKey = `team_tasks_seen_notifications_${user.id}`
     const seen = new Set(JSON.parse(sessionStorage.getItem(seenKey) || '[]'))
+    let initialized = false
+    let cancelled = false
 
     const loadNotifications = () => {
       api('/notifications?unread_only=true&limit=20')
         .then((items) => {
+          if (cancelled) return
           setNotifications(items)
-          const fresh = items.find((item) => !seen.has(item.id))
+          const freshItems = items.filter((item) => !seen.has(item.id))
+          if (initialized) {
+            const message = freshItems.find((item) => item.notification_type === 'direct_message')
+            const bell = freshItems.find((item) => item.notification_type !== 'direct_message')
+            if (message) playMessageSound(message.related_user_id, user.id, message.created_at)
+            if (bell) playSound('notification', `notification:${user.id}:${bell.id}`)
+          }
+          initialized = true
+          freshItems.forEach((item) => seen.add(item.id))
+          sessionStorage.setItem(seenKey, JSON.stringify([...seen].slice(-100)))
+          const fresh = freshItems[0]
           if (fresh) {
             if (fresh.notification_type === 'sanad_attached') {
               window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
             }
-            seen.add(fresh.id)
-            sessionStorage.setItem(seenKey, JSON.stringify([...seen].slice(-100)))
             setToast(fresh)
             if (document.hidden) showBrowserNotification(fresh)
             window.setTimeout(() => setToast((current) => current?.id === fresh.id ? null : current), 6000)
@@ -152,9 +182,9 @@ export default function App() {
     }
 
     loadNotifications()
-    const interval = window.setInterval(loadNotifications, ['super_admin', 'admin', 'employee', 'bills_user'].includes(user.role) ? 15_000 : 45_000)
-    return () => window.clearInterval(interval)
-  }, [user, browserNotificationPermission])
+    const interval = window.setInterval(loadNotifications, 15_000)
+    return () => { cancelled = true; window.clearInterval(interval) }
+  }, [user?.id, user?.role, browserNotificationPermission])
 
   useEffect(() => {
     if (!user || !['super_admin', 'admin', 'manager', 'employee'].includes(user.role)) {
@@ -436,6 +466,7 @@ export default function App() {
         <header className="bills-workspace-header">
           <div><span className="brand-mark"><Layers3 size={21} strokeWidth={1.6} /></span><div><strong>إدخال مهام المالية</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
           <div className="topbar-actions">
+            <SoundToggle enabled={soundOn} onToggle={toggleSounds} />
             <NotificationBell
               notifications={notifications}
               open={notificationsOpen}
@@ -503,6 +534,7 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-title"><button id="nav-toggle" className="icon-button" aria-label="فتح القائمة الجانبية" aria-expanded={sidebarOpen} aria-controls="main-sidebar" onClick={() => setSidebarOpen(value => !value)}><PanelRightOpen size={21} strokeWidth={1.6} /></button><div><strong>{routeTitle(route)}</strong><span>مرحباً، {user.full_name_ar}</span></div></div>
           <div className="topbar-actions">
+            <SoundToggle enabled={soundOn} onToggle={toggleSounds} />
             {['super_admin', 'admin', 'manager', 'employee'].includes(user.role) && (
               <button className="icon-button chat-trigger" onClick={() => { setChatContactId(null); setChatOpen(true) }} title="المحادثات" aria-label="المحادثات" type="button">
                 <MessageCircle size={18} />
@@ -1004,6 +1036,11 @@ function rankUrgentTasks(tasks) {
 
 function isOverdue(task) {
   return isOverExpected(task)
+}
+
+function SoundToggle({ enabled, onToggle }) {
+  const label = enabled ? 'كتم الأصوات' : 'تشغيل الأصوات'
+  return <button className="icon-button" type="button" onClick={onToggle} title={label} aria-label={label} aria-pressed={enabled}>{enabled ? <Volume2 size={20} /> : <VolumeX size={20} />}</button>
 }
 
 function ThemePicker({ theme, onThemeChange, className = '' }) {

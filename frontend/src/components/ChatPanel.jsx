@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Search, Send, Smile, X } from 'lucide-react'
 import { api } from '../api/client'
+import { playMessageSound } from '../utils/sounds'
 
 export default function ChatPanel({ currentUser, initialContactId, onClose, onUnreadChange, onConversationRead }) {
   const [contacts, setContacts] = useState([])
@@ -18,6 +19,7 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
   const emojiPickerRef = useRef(null)
   const activeContactRef = useRef(activeContactId)
   const conversationRequestRef = useRef(0)
+  const seenMessagesRef = useRef(new Map())
   activeContactRef.current = activeContactId
 
   const activeContact = contacts.find((contact) => contact.id === activeContactId) || null
@@ -59,6 +61,12 @@ export default function ChatPanel({ currentUser, initialContactId, onClose, onUn
     try {
       const items = await api(`/messages/${contactId}`)
       if (!isCurrent()) return
+      const seen = seenMessagesRef.current.get(contactId)
+      if (seen) {
+        const incoming = items.find((message) => !seen.has(message.id) && message.sender_id !== currentUser.id)
+        if (incoming) playMessageSound(incoming.sender_id, currentUser.id, incoming.created_at)
+      }
+      seenMessagesRef.current.set(contactId, new Set(items.map((message) => message.id)))
       setMessages(items)
       await api(`/messages/${contactId}/read`, { method: 'PATCH' })
       if (!isCurrent()) return

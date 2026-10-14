@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, CheckCircle2, ClipboardPaste, Eye, FileSpreadsheet, History, ImageUp, Pencil, ShieldCheck, Trash2, X } from 'lucide-react'
 import { API_BASE_URL, api, getToken } from '../api/client'
+import { playSound } from '../utils/sounds'
 
 function localDateValue() {
   const now = new Date()
@@ -71,7 +72,9 @@ export default function BillsImport() {
     setLoading(true)
     setError('')
     try {
-      setPreview(await api('/bills-import/commit', { method: 'POST', body: JSON.stringify(payload()) }))
+      const result = await api('/bills-import/commit', { method: 'POST', body: JSON.stringify(payload()) })
+      setPreview(result)
+      if (result.created_count > 0) playSound('success')
       loadHistory()
     } catch (err) {
       setError(err.message)
