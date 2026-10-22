@@ -566,6 +566,39 @@ def download_specific_sanad(task_id: int, attachment_id: int, db: Session = Depe
     )
 
 
+@router.delete("/{task_id}/sanads/{attachment_id}", response_model=BillsImportHistoryRow)
+def delete_sanad(
+    task_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_bills_importer(current_user)
+    task = bills_task_or_403(db, task_id, current_user)
+    attachment = db.query(TaskAttachment).filter(
+        TaskAttachment.id == attachment_id,
+        TaskAttachment.task_id == task.id,
+        TaskAttachment.attachment_kind == "sanad",
+    ).first()
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sanad image not found")
+    stored_filename = attachment.stored_filename
+    original_filename = attachment.original_filename
+    task.attachments.remove(attachment)
+    for user_id in sanad_notification_recipient_ids(db, task, current_user.id):
+        db.add(Notification(
+            user_id=user_id,
+            task_id=task.id,
+            title="تم حذف سند",
+            message=f"{current_user.full_name_ar} حذفت السند: {original_filename}\nالمهمة: {task.title}",
+            notification_type="sanad_deleted",
+        ))
+    db.commit()
+    delete_objects([stored_filename])
+    db.refresh(task)
+    return history_row(task)
+
+
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_bills_import_history(
     task_id: int,

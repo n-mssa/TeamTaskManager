@@ -28,6 +28,9 @@ export default function BillsImport() {
   const [deletingHistoryItem, setDeletingHistoryItem] = useState(null)
   const [deletionReason, setDeletionReason] = useState('')
   const [deletingHistoryId, setDeletingHistoryId] = useState(null)
+  const [sanadToDelete, setSanadToDelete] = useState(null)
+  const [deletingSanad, setDeletingSanad] = useState(false)
+  const [sanadDeleteError, setSanadDeleteError] = useState('')
   const [historyEdit, setHistoryEdit] = useState({ task_date: '', customer_rep: '', customer_name: '', material_name: '', note: '' })
   const readyRows = useMemo(() => preview?.rows?.filter((row) => row.status === 'ready') || [], [preview])
 
@@ -111,6 +114,27 @@ export default function BillsImport() {
       setHistoryError(err.message)
     } finally {
       setUploadingSanadId(null)
+    }
+  }
+
+  function closeSanadDelete() {
+    if (!deletingSanad) setSanadToDelete(null)
+  }
+
+  async function deleteSanad(event) {
+    event.preventDefault()
+    if (!sanadToDelete || deletingSanad) return
+    setDeletingSanad(true)
+    setSanadDeleteError('')
+    try {
+      const updated = await api(`/bills-import/${sanadToDelete.taskId}/sanads/${sanadToDelete.sanad.id}`, { method: 'DELETE' })
+      setHistory((current) => current.map((row) => row.id === updated.id ? updated : row))
+      setSanadToDelete(null)
+      window.dispatchEvent(new CustomEvent('team-tasks-refresh'))
+    } catch (err) {
+      setSanadDeleteError(err.message)
+    } finally {
+      setDeletingSanad(false)
     }
   }
 
@@ -308,9 +332,12 @@ export default function BillsImport() {
                 <td><span className={`badge status-${item.status}`}>{taskStatusLabel(item.status)}</span></td>
                 <td className="bills-sanad-column"><div className="sanad-actions">
                   {(item.sanads || []).map((sanad, index) => (
-                    <button key={sanad.id} type="button" className="sanad-view-button" title={sanad.original_filename} onClick={() => viewSanad(item, sanad)}>
-                      <Eye size={14} />سند {index + 1}
-                    </button>
+                    <span className="sanad-item" key={sanad.id}>
+                      <button type="button" className="sanad-view-button" title={sanad.original_filename} onClick={() => viewSanad(item, sanad)}>
+                        <Eye size={14} />سند {index + 1}
+                      </button>
+                      <button type="button" className="icon-button bills-history-delete" title={`حذف ${sanad.original_filename}`} aria-label={`حذف سند ${index + 1}: ${sanad.original_filename}`} disabled={deletingSanad || uploadingSanadId === item.id} onClick={() => { setSanadDeleteError(''); setSanadToDelete({ taskId: item.id, sanad }) }}><Trash2 size={14} /></button>
+                    </span>
                   ))}
                   <label className={`sanad-upload-button ${item.has_sanad ? 'replace' : ''}`}>
                     <ImageUp size={14} />{uploadingSanadId === item.id ? 'جارٍ الرفع...' : item.has_sanad ? 'إضافة سند' : 'إرفاق سند'}
@@ -342,6 +369,23 @@ export default function BillsImport() {
             </table></div>
           ) : <div className="empty-state"><span className="empty-state-icon"><History size={21} /></span><strong>لا توجد عمليات رفع سابقة</strong><span>ستظهر المهام هنا بعد تأكيد أول دفعة.</span></div>}
         </article>
+      )}
+      {sanadToDelete && (
+        <div className="modal-backdrop" role="presentation" onClick={closeSanadDelete} onKeyDown={(event) => { if (event.key === 'Escape') closeSanadDelete() }}>
+          <form className="briefing-modal bills-delete-modal" role="dialog" aria-modal="true" aria-labelledby="sanad-delete-title" onSubmit={deleteSanad} onClick={(event) => event.stopPropagation()}>
+            <header className="briefing-head">
+              <h2 id="sanad-delete-title">حذف السند؟</h2>
+              <button className="icon-button" type="button" disabled={deletingSanad} onClick={closeSanadDelete} aria-label="إغلاق"><X size={17} /></button>
+            </header>
+            <p className="sanad-delete-filename" dir="auto">{sanadToDelete.sanad.original_filename}</p>
+            <p>سيُحذف هذا السند فقط. تبقى المهمة وبقية السندات كما هي.</p>
+            {sanadDeleteError && <p className="error" role="alert">{sanadDeleteError}</p>}
+            <div className="modal-actions">
+              <button type="button" autoFocus disabled={deletingSanad} onClick={closeSanadDelete}>إلغاء</button>
+              <button className="danger" type="submit" disabled={deletingSanad}><Trash2 size={16} />{deletingSanad ? 'جارٍ الحذف...' : 'حذف السند'}</button>
+            </div>
+          </form>
+        </div>
       )}
       {deletingHistoryItem && (
         <div className="modal-backdrop" role="presentation" onClick={cancelHistoryDelete}>
