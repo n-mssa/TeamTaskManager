@@ -49,11 +49,14 @@ export default function TaskForm({ taskId, onSaved, user }) {
   const [savingBillsAssignee, setSavingBillsAssignee] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role)
   const filteredUsers = useMemo(() => {
     if (user?.role === 'employee') return users.filter((item) => item.id === user.id)
+    if (isAdmin) return users.filter((item) => item.role !== 'bills_user'
+      && departments.some((department) => String(department.id) === String(item.department_id)))
     if (!form.department_id) return []
     return users.filter((item) => String(item.department_id || '') === String(form.department_id))
-  }, [form.department_id, user, users])
+  }, [departments, form.department_id, isAdmin, user, users])
   const selectedDepartment = useMemo(
     () => departments.find((item) => String(item.id) === String(form.department_id)),
     [departments, form.department_id],
@@ -90,7 +93,7 @@ export default function TaskForm({ taskId, onSaved, user }) {
           assigned_to_user_id: user.role === 'employee' ? String(user.id) : '',
         }))
       }
-    })
+    }).catch((err) => setError(err.message))
   }, [taskId, user])
 
   useEffect(() => {
@@ -135,10 +138,19 @@ export default function TaskForm({ taskId, onSaved, user }) {
     setForm((current) => ({
       ...current,
       department_id: value,
+      assigned_to_user_id: '',
       finance_title_template: isFinance ? current.finance_title_template : '',
       finance_title_detail: isFinance ? current.finance_title_detail : '',
       title: !isFinance && current.finance_title_template ? '' : current.title,
     }))
+  }
+
+  function chooseAssignee(value) {
+    const assignee = filteredUsers.find((item) => String(item.id) === String(value))
+    if (isAdmin && assignee) {
+      chooseDepartment(String(assignee.department_id))
+    }
+    setValue('assigned_to_user_id', value)
   }
 
   function chooseFinanceTemplate(value) {
@@ -270,7 +282,7 @@ export default function TaskForm({ taskId, onSaved, user }) {
       <form className="form-grid simple-task-form" onSubmit={submit}>
         {success && <p className="ux-notice span-2" role="status">{success}</p>}
         {!taskId && form.department_id && <p className="task-department-note span-2">القسم: <strong>{selectedDepartment?.name_ar}</strong> · الأولوية الافتراضية: عادية</p>}
-        {(taskId || !user?.department_id && departments.length !== 1) && <label>القسم<select required value={form.department_id} onChange={(e) => chooseDepartment(e.target.value)} disabled={user?.role === 'employee'}>
+        {(isAdmin || taskId || !user?.department_id && departments.length !== 1) && <label>القسم<select required value={form.department_id} onChange={(e) => chooseDepartment(e.target.value)} disabled={user?.role === 'employee'}>
           <option value="">اختر القسم</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_ar}</option>)}
         </select></label>}
         {!taskId && isFinanceDepartment && <label>نوع المهمة المالية<select value={form.finance_title_template} onChange={(e) => chooseFinanceTemplate(e.target.value)}>
@@ -295,8 +307,8 @@ export default function TaskForm({ taskId, onSaved, user }) {
           </label>
         ) : <label className="span-2">عنوان المهمة<input ref={titleRef} placeholder="مثال: تصميم بوست لعرض نهاية الأسبوع" maxLength={220} required value={form.title} onChange={(e) => setValue('title', e.target.value)} /></label>}
         <label className="span-2">الموظف المسؤول
-          <select required value={form.assigned_to_user_id} onChange={(e) => setValue('assigned_to_user_id', e.target.value)} disabled={!form.department_id || user?.role === 'employee'}>
-          <option value="">{form.department_id ? 'اختر الموظف' : 'اختر القسم أولاً'}</option>{filteredUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}</option>)}
+          <select required value={form.assigned_to_user_id} onChange={(e) => chooseAssignee(e.target.value)} disabled={(!isAdmin && !form.department_id) || user?.role === 'employee'}>
+          <option value="">{isAdmin || form.department_id ? 'اختر الموظف' : 'اختر القسم أولاً'}</option>{filteredUsers.map((item) => <option key={item.id} value={item.id}>{item.full_name_ar}{isAdmin ? ` - ${departments.find((department) => String(department.id) === String(item.department_id))?.name_ar || ''}` : ''}</option>)}
         </select></label>
         <fieldset className="duration-picker span-2">
           <legend>كم تحتاج المهمة من الوقت؟</legend>
